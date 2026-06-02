@@ -28,8 +28,10 @@ def test_health_and_version_endpoints() -> None:
     version = client.get("/version")
     assert version.status_code == 200
     body = version.json()
-    assert body["version"] == app_version()
     assert body["service"] == "layer-mcp-github-v1"
+    assert body["status"] == "ok"
+    assert "git_sha" in body
+    assert "image_digest" in body
 
 
 def test_mcp_route_registered() -> None:

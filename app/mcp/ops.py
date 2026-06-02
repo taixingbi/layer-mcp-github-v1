@@ -13,7 +13,8 @@ from starlette.responses import JSONResponse, Response
 from app.allowlist.repos import ALLOWED_REPOS
 from app.clients.github import gh_headers, github_token
 from app.clients.llm import llm_api_key, llm_gateway_base, llm_headers
-from app.version import SERVICE_NAME, app_version
+from app.build_info import SERVICE_NAME, version_payload
+from app.version import app_version
 
 _READY_TIMEOUT = httpx.Timeout(5.0, connect=3.0)
 
@@ -139,10 +140,5 @@ async def metrics(_request: Request) -> Response:
 
 
 async def version(_request: Request) -> JSONResponse:
-    """Build / release version."""
-    return JSONResponse(
-        {
-            "service": SERVICE_NAME,
-            "version": app_version(),
-        }
-    )
+    """Build / release metadata (no dependency checks)."""
+    return JSONResponse(version_payload())
