@@ -84,10 +84,10 @@ Enable MCP server **layer-mcp-github-v1** (see [`.cursor/mcp.json`](.cursor/mcp.
 ```bash
 docker compose up --build
 # or
-docker run -p 8000:8000 --env-file .env YOUR_DOCKERHUB_USER/layer-mcp-github-v1:latest
+docker run -p 8000:8000 --env-file .env ghcr.io/taixingbi/layer-mcp-github-v1:latest
 ```
 
-Runs `python -m app.main --http` (MCP on port **8000**). Image tags match [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1) (`layer-mcp-github-v1:latest` on Docker Hub after CI push to `main`).
+Runs `python -m app.main --http` (MCP on port **8000**). Image tags match [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1) (`layer-mcp-github-v1:latest` on GHCR after CI push to `main`).
 
 ## Troubleshooting
 
