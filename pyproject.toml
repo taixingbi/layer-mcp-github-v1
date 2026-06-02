@@ -7,7 +7,7 @@ name = "layer-mcp-github-v1"
 version = "1.0.0"
 description = "MCP server for Q&A over allowlisted GitHub repos with LLM synthesis"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.2.0",
     "httpx>=0.27.0",
