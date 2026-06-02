@@ -121,8 +121,8 @@ def run_readiness_checks() -> dict[str, Any]:
 
 
 async def health(_request: Request) -> JSONResponse:
-    """Liveness: process is running."""
-    return JSONResponse({"status": "ok", "service": SERVICE_NAME})
+    """Liveness: process is running (no dependency checks)."""
+    return JSONResponse({"status": "ok"})
 
 
 async def ready(_request: Request) -> JSONResponse:
