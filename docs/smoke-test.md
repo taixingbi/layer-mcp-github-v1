@@ -175,6 +175,21 @@ During §3–4 expect GitHub readme/search and `POST .../v1/chat/completions` �
 
 ---
 
+## Cursor SDK synthesis (`SYNTH_ENGINE=cursor_sdk`)
+
+Optional spike path. Install with `pip install -e ".[cursor]"`. Requires `CURSOR_API_KEY` instead of a reachable LLM gateway for `/ready`.
+
+```bash
+export SYNTH_ENGINE=cursor_sdk
+export CURSOR_API_KEY=cursor_...
+# GITHUB_TOKEN and GITHUB_OWNER still required
+python -m app.main --http
+```
+
+Re-run sections **0** ( `/ready` checks `cursor_sdk` not `llm_gateway` ), **6**, and **7** with the same pass criteria (`ok: true`, citations, answer text). Compare latency and answer quality against `SYNTH_ENGINE=legacy` on the same questions.
+
+---
+
 ## Failures
 
 | Symptom | Check |

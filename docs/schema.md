@@ -4,6 +4,8 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 
 **No REST API** — only stdio MCP (Cursor) or `POST /v1/mcp` (streamable-http with `--http`).
 
+**Synthesis:** `SYNTH_ENGINE=legacy` (default, LLM gateway) or `cursor_sdk` (Cursor SDK). Tool arguments and response shape are identical; only the answer-generation backend differs ([design.md](design.md)).
+
 ---
 
 ## Endpoint

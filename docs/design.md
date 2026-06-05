@@ -19,9 +19,11 @@ Client
         ▼
    tools.github_search  →  pipeline / streaming
         │
-   ┌────┴────┐
-   ▼         ▼
-GitHub     LLM gateway
+   ┌────┴────────────┐
+   ▼                 ▼
+GitHub API     SYNTH_ENGINE
+               ├─ legacy → LLM gateway
+               └─ cursor_sdk → Cursor SDK (Ask-style)
 ```
 
 ## Modules
@@ -72,7 +74,16 @@ Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.
 
 ## Configuration
 
-`GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL` required. `HTTP_HOST` / `HTTP_PORT` for `--http`. Optional: `LOG_LEVEL`, `LOG_TZ`.
+`GITHUB_TOKEN`, `GITHUB_OWNER` required. `HTTP_HOST` / `HTTP_PORT` for `--http`. Optional: `LOG_LEVEL`, `LOG_TZ`.
+
+**Synthesis** (`SYNTH_ENGINE`, default `legacy`):
+
+| Engine | Required env | Role |
+|--------|----------------|------|
+| `legacy` | `LLM_GATEWAY_BASE_URL` | Chat + follow-ups via inference gateway |
+| `cursor_sdk` | `CURSOR_API_KEY` | Ask-style read-only synthesis via Cursor SDK (`CURSOR_MODEL`, `CURSOR_RUNTIME_CWD`) |
+
+GitHub retrieval (`gather_github_evidence`) is unchanged for both engines. MCP contract (`github_search`, SSE shape) is unchanged.
 
 ## Design choices
 

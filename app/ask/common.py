@@ -11,7 +11,8 @@ import httpx
 from app.allowlist import allowed_short_names
 from app.allowlist.resolve import resolve_repos
 from app.clients.github import github_token
-from app.clients.llm import chat_completion, generate_follow_ups, llm_gateway_base
+from app.config import synth_engine
+from app.synth import get_synth_backend
 from app.observability.correlation import UserContext, is_new_conversation
 from app.observability.log_context import latency_log_extra, user_log_extra
 from app.observability.logging_config import logger
@@ -68,9 +69,7 @@ def service_prereq_error() -> str | None:
     """Return an error message when required env/services are missing, else ``None``."""
     if not github_token():
         return "GITHUB_TOKEN not set in .env"
-    if not llm_gateway_base():
-        return "LLM_GATEWAY_BASE_URL not set in .env (required to synthesize answers)"
-    return None
+    return get_synth_backend().prereq_error()
 
 
 def repo_log_extra(
@@ -84,6 +83,7 @@ def repo_log_extra(
     extra: dict[str, Any] = {
         "tool_name": tool_name,
         "stream": stream,
+        "synth_engine": synth_engine(),
         "scope": scope.scope,
         "repo_count": len(scope.full_names),
         "repos": scope.full_names,
@@ -198,35 +198,17 @@ def run_buffered_llm(
     user: UserContext | None,
 ) -> tuple[str, list[str], dict[str, int], dict[str, int], dict[str, int]]:
     """Non-streaming chat + follow-ups; returns answer, follow-ups, latency slice, usages."""
-    latency: dict[str, int] = {}
-    messages = chat_messages(user_body)
-
-    t0 = time.perf_counter()
-    answer, chat_usage = chat_completion(
+    return get_synth_backend().buffered(
         client,
-        messages=messages,
+        question=question,
+        user_body=user_body,
+        scope_label=scope_label,
         conversation_id=conversation_id,
         request_id=request_id,
         session_id=session_id,
         trace_id=trace_id,
         user=user,
     )
-    latency["chat"] = ms_elapsed(t0)
-
-    t0 = time.perf_counter()
-    follow_ups, follow_usage = generate_follow_ups(
-        client,
-        question,
-        answer,
-        scope_label,
-        conversation_id=conversation_id,
-        request_id=request_id,
-        session_id=session_id,
-        trace_id=trace_id,
-        user=user,
-    )
-    latency["follow_up_chat"] = ms_elapsed(t0)
-    return answer, follow_ups, latency, chat_usage, follow_usage
 
 
 def tool_error_response(

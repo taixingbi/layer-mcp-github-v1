@@ -11,12 +11,11 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import Context
 
-from app.clients.llm import generate_follow_ups, iter_chat_completion_stream
+from app.synth import get_synth_backend
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
 from .common import (
-    chat_messages,
     httpx_error_message,
     log_ask_done,
     log_ask_exception,
@@ -136,10 +135,11 @@ async def stream_github_search_events(
 
                 await _notify_status("chat_stream", {})
 
+                synth = get_synth_backend()
                 t_llm = time.perf_counter()
-                for kind, payload in iter_chat_completion_stream(
+                for kind, payload in synth.iter_stream(
                     client,
-                    messages=chat_messages(user_body),
+                    user_body=user_body,
                     conversation_id=conv,
                     request_id=rid,
                     session_id=sid,
@@ -161,11 +161,11 @@ async def stream_github_search_events(
                 await _notify_status("follow_up_chat", {})
 
                 t_llm = time.perf_counter()
-                follow_ups, follow_usage = generate_follow_ups(
+                follow_ups, follow_usage = synth.follow_ups(
                     client,
-                    question,
-                    answer,
-                    scope.scope_label,
+                    question=question,
+                    answer=answer,
+                    scope_label=scope.scope_label,
                     conversation_id=conv,
                     request_id=rid,
                     session_id=sid,

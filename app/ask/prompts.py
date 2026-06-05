@@ -9,3 +9,8 @@ SYSTEM_PROMPT = """You answer questions about GitHub repositories using ONLY the
 
 FOLLOW_UP_PROMPT = """Given a user question and answer about a GitHub repo, suggest exactly 3 short follow-up questions.
 Return JSON only: {"follow_up_questions": ["...", "...", "..."]}"""
+
+ASK_MODE_APPENDIX = """You are in read-only Ask mode.
+- Answer ONLY from the Sources and question in this message.
+- Do not edit files, run shell commands, browse the network, or invent facts.
+- Use [n] citations that match the numbered Sources."""
