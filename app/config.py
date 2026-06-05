@@ -15,6 +15,13 @@ SNIPPET_MAX = 400
 LLM_CONTEXT_README_MAX = 6000
 MULTI_REPO_README_MAX = 1200
 MULTI_REPO_CODE_HITS_MAX = 20
+# Cap user message size so prompts fit vLLM --max-model-len (2048 on dev) with max_tokens.
+LLM_USER_BODY_MAX_CHARS = 4000
+
+
+def llm_user_body_max_chars() -> int:
+    """Max characters for the github_search LLM user message (sources + question)."""
+    return int(os.environ.get("LLM_USER_BODY_MAX_CHARS", str(LLM_USER_BODY_MAX_CHARS)))
 
 load_dotenv(ROOT / ".env")
 

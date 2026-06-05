@@ -14,6 +14,7 @@ from app.observability.log_context import bind_ask_context
 
 from .citations import (
     build_citations,
+    clamp_llm_user_body,
     format_multi_repo_sources,
     format_sources_for_llm,
     merge_citations,
@@ -85,6 +86,7 @@ def gather_github_evidence(
             f"{format_sources_for_llm(citations, readme, code_hits)}"
         )
 
+    user_body = clamp_llm_user_body(user_body)
     return citations, user_body, latency, readmes, code_hits
 
 
