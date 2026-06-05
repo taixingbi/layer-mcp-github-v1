@@ -20,6 +20,16 @@ def test_text_prompt_architecture_rules(monkeypatch: pytest.MonkeyPatch) -> None
     assert "debug" in TEXT_SYSTEM_PROMPT
 
 
+def test_text_prompt_presentation_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_SEARCH_ANSWER_FORMAT", "text")
+    assert "architecture wiki" in TEXT_SYSTEM_PROMPT
+    assert "Learn More" in TEXT_SYSTEM_PROMPT
+    assert "product or service names" in TEXT_SYSTEM_PROMPT
+    assert "repository names as implementation details" in TEXT_SYSTEM_PROMPT
+    assert "markdown headings" in TEXT_SYSTEM_PROMPT
+    assert "compact vertical ASCII" in TEXT_SYSTEM_PROMPT
+
+
 def test_blocks_prompt_service_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_SEARCH_ANSWER_FORMAT", "blocks")
     prompt = system_prompt()
@@ -28,6 +38,8 @@ def test_blocks_prompt_service_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "endpoint: optional" in BLOCKS_SYSTEM_PROMPT
     assert "what/why/data flow" in BLOCKS_SYSTEM_PROMPT
     assert "Deep dive trigger" in BLOCKS_SYSTEM_PROMPT
+    assert "not layer-* repo slug" in BLOCKS_SYSTEM_PROMPT
+    assert "Learn More" in BLOCKS_SYSTEM_PROMPT
 
 
 def test_chat_messages_uses_system_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
