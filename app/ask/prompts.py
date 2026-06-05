@@ -1,11 +1,25 @@
 """LLM system and follow-up prompts for github_search."""
 
 SYSTEM_PROMPT = """You answer questions about GitHub repositories using ONLY the numbered Sources below.
-- Cite with bracket indices that match Sources, e.g. [1] for README, [2] for a file.
+
+Return JSON only (no markdown fences, no prose outside JSON) with this shape:
+{
+  "blocks": [
+    {"type": "heading", "text": "Short title", "cite_ids": []},
+    {"type": "paragraph", "text": "One-sentence summary.", "cite_ids": [1]},
+    {"type": "list", "items": ["point one", "point two"], "cite_ids": [2]},
+    {"type": "service", "name": "repo-or-service-name", "role": "optional label", "endpoint": "optional /v1/path", "description": "what it does", "cite_ids": [3]}
+  ],
+  "notes": ["optional gaps — only when sources are insufficient"]
+}
+
+Rules:
+- block types: heading, paragraph, list, service only.
+- cite_ids: integers matching numbered Sources (e.g. [1] for README). Attach cite_ids to every block that uses that evidence.
 - Name which repo each point refers to when multiple repositories are in scope.
-- If evidence is insufficient, say what is missing; do not invent features.
-- Length: stay under ~120 words. Use a short intro (1 sentence) then at most 5 bullet points.
-- No repetition of the question, no long preambles, no exhaustive lists unless the user explicitly asks for detail."""
+- If evidence is insufficient, add notes[] entries; do not invent features.
+- Length: stay under ~120 words total across blocks. At most 1 heading, 1 paragraph, 1 list (≤5 items), and ≤5 service blocks unless the user asks for detail.
+- No repetition of the question or long preambles."""
 
 FOLLOW_UP_PROMPT = """Given a user question and answer about a GitHub repo, suggest exactly 3 short follow-up questions.
 Return JSON only: {"follow_up_questions": ["...", "...", "..."]}"""

@@ -46,7 +46,18 @@ JSON-RPC result with `.result.structuredContent` (same object as stream `done`):
 | Top-level | Description |
 |-----------|-------------|
 | `meta` | Correlation ids, `is_new_conversation`, `user`, `route`, `tool` (`github_search`), `rewrite`, `github` (`scope`, `repos`, optional `repo`) |
-| `answer` | `text`, `citations[]` with `cite_id` and `source` only |
+| `answer` | `format` (`blocks`), `text` (markdown derived from blocks), `blocks[]`, `notes[]`, `citations[]` with `cite_id` and `source` |
+
+### `answer.blocks` types
+
+| `type` | Fields |
+|--------|--------|
+| `heading` | `text`, `cite_ids[]` |
+| `paragraph` | `text`, `cite_ids[]` |
+| `list` | `items[]`, `cite_ids[]` |
+| `service` | `name`, `description`, optional `role`, `endpoint`, `service_type`, `cite_ids[]` |
+
+`answer.notes` lists evidence gaps (sources insufficient). `answer.text` is generated server-side from blocks for streaming and legacy clients.
 | `follow_up_questions` | string array |
 | `latency_ms` | `total` plus `tool_github_search` breakdown |
 | `usage` | `total` token counts only |

@@ -8,11 +8,11 @@ from typing import Any
 
 import httpx
 
+from app.ask.blocks import iter_text_chunks, parse_structured_answer
 from app.ask.common import chat_messages
 from app.clients.llm import (
     chat_completion,
     generate_follow_ups,
-    iter_chat_completion_stream,
     llm_gateway_base,
 )
 from app.observability.correlation import UserContext
@@ -43,7 +43,7 @@ class LegacySynth:
         messages = chat_messages(user_body)
 
         t_chat = time.perf_counter()
-        answer, chat_usage = chat_completion(
+        raw_answer, chat_usage = chat_completion(
             client,
             messages=messages,
             conversation_id=conversation_id,
@@ -52,6 +52,7 @@ class LegacySynth:
             trace_id=trace_id,
             user=user,
         )
+        answer = parse_structured_answer(raw_answer).text
         latency["chat"] = int((time.perf_counter() - t_chat) * 1000)
 
         t_follow = time.perf_counter()
@@ -80,7 +81,7 @@ class LegacySynth:
         trace_id: str | None,
         user: UserContext | None,
     ) -> Iterator[tuple[str, Any]]:
-        return iter_chat_completion_stream(
+        raw_answer, usage = chat_completion(
             client,
             messages=chat_messages(user_body),
             conversation_id=conversation_id,
@@ -89,6 +90,11 @@ class LegacySynth:
             trace_id=trace_id,
             user=user,
         )
+        answer_content = parse_structured_answer(raw_answer)
+        for chunk in iter_text_chunks(answer_content.text):
+            yield ("delta", chunk)
+        yield ("usage", usage)
+        yield ("done", answer_content)
 
     def follow_ups(
         self,

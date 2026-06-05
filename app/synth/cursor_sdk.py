@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 
+from app.ask.blocks import AnswerContent, iter_text_chunks, parse_structured_answer
 from app.ask.prompts import ASK_MODE_APPENDIX, FOLLOW_UP_PROMPT, SYSTEM_PROMPT
 from app.config import cursor_api_key, cursor_model, cursor_runtime_cwd
 from app.observability.correlation import UserContext
@@ -110,7 +111,9 @@ class CursorSdkSynth:
         latency: dict[str, int] = {}
 
         t_chat = time.perf_counter()
-        answer, run_id = _run_agent_prompt(_format_synth_prompt(user_body))
+        raw_answer, run_id = _run_agent_prompt(_format_synth_prompt(user_body))
+        answer_content = parse_structured_answer(raw_answer)
+        answer = answer_content.text
         latency["chat"] = int((time.perf_counter() - t_chat) * 1000)
         if run_id:
             logger.info(
@@ -144,41 +147,17 @@ class CursorSdkSynth:
         user: UserContext | None,
     ) -> Iterator[tuple[str, Any]]:
         del client, conversation_id, request_id, session_id, trace_id, user
-        from cursor_sdk import Agent, CursorAgentError
-
-        prompt = _format_synth_prompt(user_body)
-        parts: list[str] = []
-
-        try:
-            with Agent.create(_agent_options()) as agent:
-                run = agent.send(prompt)
-                run_id = getattr(run, "id", None) or getattr(run, "run_id", None)
-                if run_id:
-                    logger.info(
-                        "cursor_sdk stream start",
-                        extra={
-                            "cursor_run_id": str(run_id),
-                            "synth_engine": "cursor_sdk",
-                        },
-                    )
-                for chunk in run.iter_text():
-                    if chunk:
-                        parts.append(str(chunk))
-                        yield ("delta", str(chunk))
-                result = run.wait()
-        except CursorAgentError as exc:
-            raise ValueError(f"Cursor SDK startup failed: {exc}") from exc
-
-        if getattr(result, "status", None) == "error":
-            raise ValueError(
-                f"Cursor SDK run failed: {getattr(result, 'run_id', None) or 'unknown'}"
+        raw_answer, run_id = _run_agent_prompt(_format_synth_prompt(user_body))
+        if run_id:
+            logger.info(
+                "cursor_sdk stream start",
+                extra={"cursor_run_id": run_id, "synth_engine": "cursor_sdk"},
             )
-
-        content = _extract_result_text(result) or "".join(parts).strip()
-        if not content:
-            raise ValueError("Cursor SDK stream returned no content")
+        answer_content = parse_structured_answer(raw_answer)
+        for chunk in iter_text_chunks(answer_content.text):
+            yield ("delta", chunk)
         yield ("usage", dict(_EMPTY_USAGE))
-        yield ("done", content)
+        yield ("done", answer_content)
 
     def follow_ups(
         self,

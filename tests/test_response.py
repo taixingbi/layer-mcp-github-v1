@@ -1,5 +1,6 @@
 """Standard tool response shape tests."""
 
+from app.ask.blocks import AnswerContent
 from app.ask.response import (
     GITHUB_SEARCH_TOOL,
     build_tool_error,
@@ -30,7 +31,11 @@ def test_build_tool_response_matches_schema() -> None:
         question="What is huntAi?",
         is_new_conversation=False,
         multi=True,
-        answer_text="Hello [1]",
+        answer_content=AnswerContent(
+            text="Hello [1]",
+            blocks=[{"type": "paragraph", "text": "Hello [1]", "cite_ids": [1]}],
+            notes=[],
+        ),
         internal_citations=[{"index": 1, "label": "a README"}],
         follow_up_questions=["Q1?"],
         internal_latency={
@@ -47,6 +52,8 @@ def test_build_tool_response_matches_schema() -> None:
     assert body["meta"]["route"]["reason"] == route_reason(scope="all", multi=True)
     assert body["meta"]["github"]["scope"] == "all"
     assert list(body["meta"]["github"].keys()) == ["scope", "repos"]
+    assert body["answer"]["format"] == "blocks"
+    assert body["answer"]["blocks"][0]["type"] == "paragraph"
     assert body["answer"]["citations"] == [{"cite_id": 1, "source": "a README"}]
     tool_key = tool_metrics_key(GITHUB_SEARCH_TOOL)
     assert body["latency_ms"][tool_key]["retrieve_rerank"] == 30

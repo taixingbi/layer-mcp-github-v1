@@ -12,6 +12,7 @@ from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
+from .blocks import AnswerContent, parse_structured_answer
 from .citations import (
     build_citations,
     clamp_llm_user_body,
@@ -98,7 +99,7 @@ def finish_github_search_result(
     question: str,
     is_new_conv: bool,
     citations: list[dict[str, Any]],
-    answer: str,
+    answer: str | AnswerContent,
     follow_ups: list[str],
     latency: dict[str, int],
     chat_usage: dict[str, int],
@@ -112,6 +113,7 @@ def finish_github_search_result(
 ) -> dict[str, Any]:
     """Assemble the standard tool response payload."""
     latency["total"] = int((time.perf_counter() - t0) * 1000)
+    answer_content = answer if isinstance(answer, AnswerContent) else parse_structured_answer(answer)
     return build_tool_response(
         request_id=rid,
         session_id=sid,
@@ -123,7 +125,7 @@ def finish_github_search_result(
         question=question,
         is_new_conversation=is_new_conv,
         multi=multi,
-        answer_text=answer,
+        answer_content=answer_content,
         internal_citations=citations,
         follow_up_questions=follow_ups,
         internal_latency=latency,

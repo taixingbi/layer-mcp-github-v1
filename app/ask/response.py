@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.ask.blocks import ANSWER_FORMAT_BLOCKS, AnswerContent
 from app.observability.correlation import UserContext
 
 TOOL_API_VERSION = "v1"
@@ -156,6 +157,21 @@ def _status_failed(message: str) -> dict[str, Any]:
     return {"ok": False, "state": "failed", "code": "failed", "message": message}
 
 
+def build_answer_payload(
+    *,
+    answer_content: AnswerContent,
+    internal_citations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """``answer`` object with derived text, structured blocks, and citations."""
+    return {
+        "format": answer_content.format or ANSWER_FORMAT_BLOCKS,
+        "text": answer_content.text,
+        "blocks": list(answer_content.blocks),
+        "notes": list(answer_content.notes),
+        "citations": citations_for_answer(internal_citations),
+    }
+
+
 def build_tool_response(
     *,
     request_id: str,
@@ -168,7 +184,7 @@ def build_tool_response(
     question: str,
     is_new_conversation: bool,
     multi: bool,
-    answer_text: str,
+    answer_content: AnswerContent,
     internal_citations: list[dict[str, Any]],
     follow_up_questions: list[str],
     internal_latency: dict[str, int],
@@ -193,10 +209,10 @@ def build_tool_response(
             multi=multi,
             logical_tool=logical_tool,
         ),
-        "answer": {
-            "text": answer_text,
-            "citations": citations_for_answer(internal_citations),
-        },
+        "answer": build_answer_payload(
+            answer_content=answer_content,
+            internal_citations=internal_citations,
+        ),
         "follow_up_questions": list(follow_up_questions),
         "latency_ms": map_latency_ms(internal_latency, logical_tool=logical_tool),
         "usage": map_usage_block(chat_usage, follow_usage),
@@ -236,7 +252,13 @@ def build_tool_error(
         meta.setdefault("github", {})["allowed"] = allowed
     return {
         "meta": meta,
-        "answer": {"text": "", "citations": []},
+        "answer": {
+            "format": ANSWER_FORMAT_BLOCKS,
+            "text": "",
+            "blocks": [],
+            "notes": [],
+            "citations": [],
+        },
         "follow_up_questions": [],
         "latency_ms": {},
         "usage": {},

@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import Context
 
+from app.ask.blocks import AnswerContent, iter_text_chunks, parse_structured_answer
 from app.synth import get_synth_backend
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
@@ -120,7 +121,7 @@ async def stream_github_search_events(
         citations: list[dict[str, Any]] = []
         readmes: dict[str, str] = {}
         code_hits: list[dict[str, str]] = []
-        answer = ""
+        answer_content = AnswerContent(text="", blocks=[], notes=[])
         follow_ups: list[str] = []
 
         try:
@@ -154,7 +155,10 @@ async def stream_github_search_events(
                     elif kind == "usage":
                         chat_usage = payload
                     elif kind == "done":
-                        answer = str(payload)
+                        if isinstance(payload, AnswerContent):
+                            answer_content = payload
+                        else:
+                            answer_content = parse_structured_answer(str(payload))
 
                 latency["chat"] = int((time.perf_counter() - t_llm) * 1000)
 
@@ -164,7 +168,7 @@ async def stream_github_search_events(
                 follow_ups, follow_usage = synth.follow_ups(
                     client,
                     question=question,
-                    answer=answer,
+                    answer=answer_content.text,
                     scope_label=scope.scope_label,
                     conversation_id=conv,
                     request_id=rid,
@@ -198,7 +202,7 @@ async def stream_github_search_events(
             question=question,
             is_new_conv=new_conv,
             citations=citations,
-            answer=answer,
+            answer=answer_content,
             follow_ups=follow_ups,
             latency=latency,
             chat_usage=chat_usage,
