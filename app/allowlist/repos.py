@@ -11,5 +11,5 @@ ALLOWED_REPOS: tuple[str, ...] = (
     "layer-rag-ingest-v1",
     "layer-rag-query-v1",
     "layer-router-train-v1",
-    "layer-web-v1",
+    "layer-web-v1"
 )
