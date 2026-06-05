@@ -17,7 +17,7 @@ from app.observability.correlation import UserContext, is_new_conversation
 from app.observability.log_context import latency_log_extra, user_log_extra
 from app.observability.logging_config import logger
 
-from .prompts import SYSTEM_PROMPT
+from .prompts import system_prompt
 from .response import build_tool_error
 
 
@@ -68,7 +68,7 @@ def resolve_ask_scope_or_error(
 def chat_messages(user_body: str) -> list[dict[str, str]]:
     """OpenAI-style messages for github_search chat (system + user with sources)."""
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt()},
         {"role": "user", "content": user_body},
     ]
 

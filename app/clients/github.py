@@ -33,14 +33,111 @@ def gh_headers() -> dict[str, str]:
     return h
 
 
-def search_keywords(question: str) -> str:
+def search_keywords(question: str, *, path_prefix: str | None = None) -> str:
     """Derive a short GitHub code-search query from the user question."""
     words = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]{2,}", question or "")
     if words:
         return " ".join(words[:4])
+    if path_prefix:
+        parts = [p for p in path_prefix.strip("/").split("/") if len(p) >= 2]
+        if parts:
+            return " ".join(parts[-3:])
     cleaned = re.sub(r"[^\w\s-]", " ", question or "")
     parts = [p for p in cleaned.split() if len(p) >= 2][:3]
     return " ".join(parts) if parts else "main"
+
+
+def _path_qualifier(path_prefix: str | None) -> str:
+    path = (path_prefix or "").strip("/")
+    return f" path:{path}" if path else ""
+
+
+def _fetch_file_content(
+    client: httpx.Client,
+    owner: str,
+    name: str,
+    file_path: str,
+) -> dict[str, str] | None:
+    """Fetch one file from the contents API as a code hit."""
+    response = client.get(
+        f"https://api.github.com/repos/{owner}/{name}/contents/{file_path}",
+        headers=gh_headers(),
+    )
+    if response.status_code != 200:
+        return None
+    data = response.json()
+    if data.get("type") != "file":
+        return None
+    snippet = _decode_readme_payload(data)
+    if not snippet:
+        return None
+    full_name = f"{owner}/{name}"
+    return {
+        "path": file_path,
+        "url": data.get("html_url") or f"https://github.com/{full_name}/blob/HEAD/{file_path}",
+        "snippet": snippet[: SNIPPET_MAX * 2],
+        "repo": full_name,
+    }
+
+
+def fetch_path_files(
+    client: httpx.Client,
+    full_name: str,
+    path_prefix: str,
+    *,
+    max_files: int = 8,
+) -> list[dict[str, str]]:
+    """Fetch key files under a directory path (e.g. Next.js blog pages)."""
+    owner, name = full_name.split("/", 1)
+    prefix = path_prefix.strip("/")
+    response = client.get(
+        f"https://api.github.com/repos/{owner}/{name}/contents/{prefix}",
+        headers=gh_headers(),
+    )
+    if response.status_code == 404:
+        return []
+    response.raise_for_status()
+    entries = response.json()
+    if not isinstance(entries, list):
+        entries = [entries]
+
+    targets: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        entry_path = str(entry.get("path") or "")
+        entry_type = str(entry.get("type") or "")
+        if entry_type == "file":
+            targets.append(entry_path)
+        elif entry_type == "dir":
+            targets.append(f"{entry_path}/page.tsx")
+
+    for extra in (f"{prefix}/page.tsx", f"{prefix}/layout.tsx"):
+        if extra not in targets:
+            targets.insert(0, extra)
+
+    hits: list[dict[str, str]] = []
+    for file_path in targets:
+        if len(hits) >= max_files:
+            break
+        hit = _fetch_file_content(client, owner, name, file_path)
+        if hit:
+            hits.append(hit)
+    return hits
+
+
+def _merge_code_hits(*groups: list[dict[str, str]]) -> list[dict[str, str]]:
+    merged: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for group in groups:
+        for hit in group:
+            url = (hit.get("url") or "").strip()
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
+            merged.append(hit)
+    return merged
 
 
 def _decode_readme_payload(data: dict[str, Any]) -> str:
@@ -83,7 +180,7 @@ def _search_code(
         params={"q": query, "per_page": per_page},
         headers={**gh_headers(), "Accept": "application/vnd.github.text-match+json"},
     )
-    if r.status_code in (403, 422):
+    if r.status_code in (401, 403, 422):
         return []
     r.raise_for_status()
     return r.json().get("items") or []
@@ -136,21 +233,29 @@ def fetch_code_hits_multi(
     question: str,
     *,
     per_page: int = CODE_HITS_MAX,
+    path_prefix: str | None = None,
 ) -> list[dict[str, str]]:
     """Code search per repo; parallel queries when multi-repo."""
     if not full_names:
         return []
-    kw = search_keywords(question)
+    kw = (
+        search_keywords("", path_prefix=path_prefix)
+        if path_prefix
+        else search_keywords(question, path_prefix=path_prefix)
+    )
+    if path_prefix and kw == "main":
+        kw = search_keywords(question, path_prefix=path_prefix)
+    path_q = _path_qualifier(path_prefix)
 
     if len(full_names) == 1:
-        items = _search_code(client, f"{kw} repo:{full_names[0]}", per_page)
+        items = _search_code(client, f"{kw}{path_q} repo:{full_names[0]}", per_page)
         return [_item_to_hit(item, full_names[0]) for item in items[:per_page]]
 
     per_repo = max(3, per_page // len(full_names))
     workers = min(github_fetch_workers(), len(full_names))
 
     def _search_one(fn: str) -> tuple[str, list[dict[str, Any]]]:
-        return fn, _search_code(client, f"{kw} repo:{fn}", per_repo)
+        return fn, _search_code(client, f"{kw}{path_q} repo:{fn}", per_repo)
 
     repo_batches: list[tuple[str, list[dict[str, Any]]]] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:

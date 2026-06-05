@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any
+from app.config import github_search_answer_format
 
 ANSWER_FORMAT_BLOCKS = "blocks"
+ANSWER_FORMAT_TEXT = "text"
 
 _BLOCK_TYPES = frozenset({"heading", "paragraph", "list", "service"})
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -137,6 +138,19 @@ def _strip_json_fences(raw: str) -> str:
     if text.startswith("```"):
         text = _FENCE_RE.sub("", text).strip()
     return text
+
+
+def parse_text_answer(raw: str) -> AnswerContent:
+    """Use LLM prose directly for the original text-only answer schema."""
+    text = raw.strip()
+    return AnswerContent(text=text, blocks=[], notes=[], format=ANSWER_FORMAT_TEXT)
+
+
+def resolve_answer_content(raw: str) -> AnswerContent:
+    """Parse synthesis output according to ``GITHUB_SEARCH_ANSWER_FORMAT``."""
+    if github_search_answer_format() == "blocks":
+        return parse_structured_answer(raw)
+    return parse_text_answer(raw)
 
 
 def parse_structured_answer(raw: str) -> AnswerContent:

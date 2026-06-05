@@ -13,7 +13,8 @@ from app.ask.response import (
 from app.observability.correlation import UserContext
 
 
-def test_build_tool_response_matches_schema() -> None:
+def test_build_tool_response_matches_schema(monkeypatch) -> None:
+    monkeypatch.setenv("GITHUB_SEARCH_ANSWER_FORMAT", "blocks")
     user = UserContext(
         user_id="u1",
         user_roles="admin",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ask.blocks import ANSWER_FORMAT_BLOCKS, AnswerContent
+from app.ask.blocks import ANSWER_FORMAT_BLOCKS, ANSWER_FORMAT_TEXT, AnswerContent
 from app.observability.correlation import UserContext
 
 TOOL_API_VERSION = "v1"
@@ -65,8 +65,8 @@ def build_meta(
     is_new_conversation: bool = False,
     multi: bool = False,
     logical_tool: str = GITHUB_SEARCH_TOOL,
+    path: str | None = None,
 ) -> dict[str, Any]:
-    """``meta`` block for tool responses and stream ``meta`` events."""
     scope_val = scope or repo or logical_tool
     meta: dict[str, Any] = {
         "request_id": request_id,
@@ -91,6 +91,8 @@ def build_meta(
         github["repos"] = repos
     if repo is not None:
         github["repo"] = repo
+    if path:
+        github["path"] = path
     if github:
         meta["github"] = github
     return meta
@@ -162,14 +164,17 @@ def build_answer_payload(
     answer_content: AnswerContent,
     internal_citations: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """``answer`` object with derived text, structured blocks, and citations."""
-    return {
-        "format": answer_content.format or ANSWER_FORMAT_BLOCKS,
+    """``answer`` object with text, citations, and optional structured blocks."""
+    fmt = answer_content.format or ANSWER_FORMAT_TEXT
+    payload: dict[str, Any] = {
         "text": answer_content.text,
-        "blocks": list(answer_content.blocks),
-        "notes": list(answer_content.notes),
         "citations": citations_for_answer(internal_citations),
     }
+    if fmt == ANSWER_FORMAT_BLOCKS:
+        payload["format"] = ANSWER_FORMAT_BLOCKS
+        payload["blocks"] = list(answer_content.blocks)
+        payload["notes"] = list(answer_content.notes)
+    return payload
 
 
 def build_tool_response(
@@ -191,8 +196,8 @@ def build_tool_response(
     chat_usage: dict[str, int],
     follow_usage: dict[str, int],
     logical_tool: str = GITHUB_SEARCH_TOOL,
+    path: str | None = None,
 ) -> dict[str, Any]:
-    """Full tool result (buffered ``structuredContent`` or stream ``done`` event)."""
     repo = repos[0] if len(repos) == 1 else None
     return {
         "meta": build_meta(
@@ -208,6 +213,7 @@ def build_tool_response(
             is_new_conversation=is_new_conversation,
             multi=multi,
             logical_tool=logical_tool,
+            path=path,
         ),
         "answer": build_answer_payload(
             answer_content=answer_content,

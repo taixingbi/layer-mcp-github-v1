@@ -9,8 +9,8 @@ from typing import Any
 
 import httpx
 
-from app.ask.blocks import AnswerContent, iter_text_chunks, parse_structured_answer
-from app.ask.prompts import ASK_MODE_APPENDIX, FOLLOW_UP_PROMPT, SYSTEM_PROMPT
+from app.ask.blocks import AnswerContent, iter_text_chunks, resolve_answer_content
+from app.ask.prompts import ASK_MODE_APPENDIX, FOLLOW_UP_PROMPT, system_prompt
 from app.clients.llm import EMPTY_USAGE
 from app.config import cursor_api_key, cursor_model, cursor_runtime_cwd, github_search_follow_ups
 from app.observability.correlation import UserContext
@@ -25,7 +25,7 @@ _EMPTY_USAGE: dict[str, int] = {
 
 def _format_synth_prompt(user_body: str) -> str:
     return (
-        f"{SYSTEM_PROMPT}\n\n{ASK_MODE_APPENDIX}\n\n"
+        f"{system_prompt()}\n\n{ASK_MODE_APPENDIX}\n\n"
         f"---\nSources and question:\n{user_body}"
     )
 
@@ -113,7 +113,7 @@ class CursorSdkSynth:
 
         t_chat = time.perf_counter()
         raw_answer, run_id = _run_agent_prompt(_format_synth_prompt(user_body))
-        answer_content = parse_structured_answer(raw_answer)
+        answer_content = resolve_answer_content(raw_answer)
         answer = answer_content.text
         latency["chat"] = int((time.perf_counter() - t_chat) * 1000)
         if run_id:
@@ -157,7 +157,7 @@ class CursorSdkSynth:
                 "cursor_sdk stream start",
                 extra={"cursor_run_id": run_id, "synth_engine": "cursor_sdk"},
             )
-        answer_content = parse_structured_answer(raw_answer)
+        answer_content = resolve_answer_content(raw_answer)
         for chunk in iter_text_chunks(answer_content.text):
             yield ("delta", chunk)
         yield ("usage", dict(_EMPTY_USAGE))

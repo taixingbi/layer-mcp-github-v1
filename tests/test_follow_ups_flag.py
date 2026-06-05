@@ -18,7 +18,7 @@ def test_legacy_skips_follow_ups_by_default(monkeypatch: pytest.MonkeyPatch) -> 
     with patch("app.synth.legacy.chat_completion", return_value=('{"blocks":[]}', {})) as mock_chat:
         with patch("app.synth.legacy.generate_follow_ups") as mock_follow:
             with patch(
-                "app.synth.legacy.parse_structured_answer",
+                "app.synth.legacy.resolve_answer_content",
                 return_value=AnswerContent(text="answer", blocks=[], notes=[]),
             ):
                 synth = LegacySynth()

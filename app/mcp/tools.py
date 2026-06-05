@@ -34,6 +34,7 @@ def _correlation_kwargs(
 async def github_search(
     question: str,
     repo: str | None = None,
+    path: str | None = None,
     stream: bool = True,
     request_id: str | None = None,
     session_id: str | None = None,
@@ -58,6 +59,7 @@ async def github_search(
         result = await github_search_mcp_stream(
             repo,
             question,
+            path=path,
             ctx=ctx,
             http_path="stdio",
             tool_name="github_search",
@@ -70,6 +72,7 @@ async def github_search(
             github_search_impl,
             repo,
             question,
+            path=path,
             http_method="-",
             http_path="stdio",
             stream=False,

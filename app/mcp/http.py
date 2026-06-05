@@ -54,17 +54,20 @@ def is_streaming_tools_call(body: dict[str, Any]) -> bool:
     return _truthy_stream(args.get("stream"))
 
 
-def parse_tools_call_arguments(body: dict[str, Any]) -> tuple[str | None, str, dict[str, Any]]:
-    """Extract repo, question, and raw arguments from a JSON-RPC tools/call body."""
+def parse_tools_call_arguments(body: dict[str, Any]) -> tuple[str | None, str, str | None, dict[str, Any]]:
+    """Extract repo, question, path, and raw arguments from a JSON-RPC tools/call body."""
     params = body.get("params") or {}
     args = dict(params.get("arguments") or {})
     repo = args.get("repo")
     if repo is not None and not str(repo).strip():
         repo = None
+    path = args.get("path")
+    if path is not None and not str(path).strip():
+        path = None
     question = (args.get("question") or "").strip()
     if not question:
         raise ValueError("question is required in tools/call arguments")
-    return repo, question, args
+    return repo, question, path, args
 
 
 def tools_call_stream_kwargs(request: Request, args: dict[str, Any]) -> dict[str, Any]:
@@ -88,7 +91,7 @@ async def mcp_tools_call_sse(
     """Run github_search streaming and remap SSE events for MCP HTTP clients."""
     rpc_id = request_id_from(body)
     try:
-        repo, question, args = parse_tools_call_arguments(body)
+        repo, question, path, args = parse_tools_call_arguments(body)
     except ValueError as exc:
         yield sse_error_frame(rpc_id, INVALID_PARAMS, str(exc))
         return
@@ -105,6 +108,7 @@ async def mcp_tools_call_sse(
     async for frame in stream_github_search_events(
         repo,
         question,
+        path=path,
         http_method=request.method,
         http_path=request.url.path.rstrip("/") or MCP_HTTP_PATH,
         tool_name=tool_name,

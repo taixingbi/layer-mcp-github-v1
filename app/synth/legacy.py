@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from app.ask.blocks import iter_text_chunks, parse_structured_answer
+from app.ask.blocks import AnswerContent, iter_text_chunks, resolve_answer_content
 from app.ask.common import chat_messages
 from app.clients.llm import EMPTY_USAGE, chat_completion, generate_follow_ups, llm_gateway_base
 from app.config import github_search_follow_ups
@@ -49,7 +49,8 @@ class LegacySynth:
             trace_id=trace_id,
             user=user,
         )
-        answer = parse_structured_answer(raw_answer).text
+        answer_content = resolve_answer_content(raw_answer)
+        answer = answer_content.text
         latency["chat"] = int((time.perf_counter() - t_chat) * 1000)
 
         if github_search_follow_ups():
@@ -90,7 +91,7 @@ class LegacySynth:
             trace_id=trace_id,
             user=user,
         )
-        answer_content = parse_structured_answer(raw_answer)
+        answer_content = resolve_answer_content(raw_answer)
         for chunk in iter_text_chunks(answer_content.text):
             yield ("delta", chunk)
         yield ("usage", usage)
