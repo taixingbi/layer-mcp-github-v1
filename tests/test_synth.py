@@ -36,6 +36,7 @@ def test_cursor_prereq_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None
 def test_cursor_buffered_calls_prompt(mock_agent: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CURSOR_API_KEY", "cursor_test_key")
     monkeypatch.setenv("SYNTH_ENGINE", "cursor_sdk")
+    monkeypatch.setenv("GITHUB_SEARCH_FOLLOW_UPS", "true")
 
     chat_result = MagicMock(status="finished", result="Answer [1]", run_id="run-1")
     follow_result = MagicMock(

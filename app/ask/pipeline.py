@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from app.clients.github import fetch_code_hits_multi, fetch_readme
+from app.clients.github import fetch_code_hits_multi, fetch_readmes_parallel
 from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
@@ -45,9 +45,7 @@ def gather_github_evidence(
     scope_label = ", ".join(full_names)
 
     t_gh = time.perf_counter()
-    readmes: dict[str, str] = {}
-    for fn in full_names:
-        readmes[fn] = fetch_readme(client, fn)
+    readmes = fetch_readmes_parallel(client, full_names)
     latency["github_readme"] = int((time.perf_counter() - t_gh) * 1000)
 
     t_gh = time.perf_counter()
@@ -180,7 +178,7 @@ def github_search_impl(
         method=http_method,
         path=http_path,
     ):
-        scope, err_msg = resolve_ask_scope_or_error(repo)
+        scope, err_msg = resolve_ask_scope_or_error(repo, question=question)
         if err_msg is not None:
             return _fail(err_msg)
 

@@ -12,6 +12,8 @@ import httpx
 from mcp.server.fastmcp import Context
 
 from app.ask.blocks import AnswerContent, iter_text_chunks, parse_structured_answer
+from app.clients.llm import EMPTY_USAGE
+from app.config import github_search_follow_ups
 from app.synth import get_synth_backend
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
@@ -89,7 +91,7 @@ async def stream_github_search_events(
         method=http_method,
         path=http_path,
     ):
-        scope, err_msg = resolve_ask_scope_or_error(repo)
+        scope, err_msg = resolve_ask_scope_or_error(repo, question=question)
         if err_msg is not None:
             async for frame in _emit_error(err_msg):
                 yield frame
@@ -162,21 +164,23 @@ async def stream_github_search_events(
 
                 latency["chat"] = int((time.perf_counter() - t_llm) * 1000)
 
-                await _notify_status("follow_up_chat", {})
-
-                t_llm = time.perf_counter()
-                follow_ups, follow_usage = synth.follow_ups(
-                    client,
-                    question=question,
-                    answer=answer_content.text,
-                    scope_label=scope.scope_label,
-                    conversation_id=conv,
-                    request_id=rid,
-                    session_id=sid,
-                    trace_id=tid,
-                    user=user,
-                )
-                latency["follow_up_chat"] = int((time.perf_counter() - t_llm) * 1000)
+                if github_search_follow_ups():
+                    await _notify_status("follow_up_chat", {})
+                    t_llm = time.perf_counter()
+                    follow_ups, follow_usage = synth.follow_ups(
+                        client,
+                        question=question,
+                        answer=answer_content.text,
+                        scope_label=scope.scope_label,
+                        conversation_id=conv,
+                        request_id=rid,
+                        session_id=sid,
+                        trace_id=tid,
+                        user=user,
+                    )
+                    latency["follow_up_chat"] = int((time.perf_counter() - t_llm) * 1000)
+                else:
+                    follow_ups, follow_usage = [], dict(EMPTY_USAGE)
 
         except (httpx.HTTPError, ValueError) as e:
             log_ask_exception(e, stream=True)

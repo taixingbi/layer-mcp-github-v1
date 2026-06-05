@@ -46,3 +46,9 @@ def cursor_model() -> str:
 
 def cursor_runtime_cwd() -> str:
     return (os.environ.get("CURSOR_RUNTIME_CWD") or "/tmp").strip()
+
+
+def github_search_follow_ups() -> bool:
+    """Second LLM pass for follow-up questions (off by default — saves ~1–3s latency)."""
+    raw = (os.environ.get("GITHUB_SEARCH_FOLLOW_UPS") or "false").strip().lower()
+    return raw in ("1", "true", "yes", "on")

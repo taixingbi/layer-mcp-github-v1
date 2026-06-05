@@ -30,7 +30,7 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `question` | yes | — | User question |
-| `repo` | no | all allowlisted | Short name or `owner/name` |
+| `repo` | no | ranked subset (`GITHUB_REPO_ROUTING`) or full allowlist | Short name or `owner/name` |
 | `stream` | no | `true` | `false` → buffered JSON-RPC result; `true` (default) → SSE on HTTP `/v1/mcp` when Accept allows |
 | `request_id` | no | env / UUID | `X-Request-Id` to gateway |
 | `session_id` | no | env / UUID | `X-Session-Id` |
@@ -58,7 +58,7 @@ JSON-RPC result with `.result.structuredContent` (same object as stream `done`):
 | `service` | `name`, `description`, optional `role`, `endpoint`, `service_type`, `cite_ids[]` |
 
 `answer.notes` lists evidence gaps (sources insufficient). `answer.text` is generated server-side from blocks for streaming and legacy clients.
-| `follow_up_questions` | string array |
+| `follow_up_questions` | string array (empty unless `GITHUB_SEARCH_FOLLOW_UPS=true`) |
 | `latency_ms` | `total` plus `tool_github_search` breakdown |
 | `usage` | `total` token counts only |
 | `status` | `ok`, `state`, `code` (`ok` / `failed`; `message` on failure) |

@@ -34,9 +34,13 @@ class AskScope:
         return ", ".join(self.full_names)
 
 
-def resolve_ask_scope(repo: str | None) -> tuple[AskScope | None, dict[str, Any] | None]:
+def resolve_ask_scope(
+    repo: str | None,
+    *,
+    question: str | None = None,
+) -> tuple[AskScope | None, dict[str, Any] | None]:
     """Resolve repo argument; return ``(scope, None)`` or ``(None, error dict)``."""
-    resolved = resolve_repos(repo)
+    resolved = resolve_repos(repo, question=question)
     if not resolved.get("ok"):
         return None, resolved
     full_names: list[str] = resolved["full_names"]
@@ -46,9 +50,13 @@ def resolve_ask_scope(repo: str | None) -> tuple[AskScope | None, dict[str, Any]
     )
 
 
-def resolve_ask_scope_or_error(repo: str | None) -> tuple[AskScope | None, str | None]:
+def resolve_ask_scope_or_error(
+    repo: str | None,
+    *,
+    question: str | None = None,
+) -> tuple[AskScope | None, str | None]:
     """Resolve scope and service prereqs; return ``(scope, None)`` or ``(None, error message)``."""
-    scope, err = resolve_ask_scope(repo)
+    scope, err = resolve_ask_scope(repo, question=question)
     if err is not None:
         return None, str(err.get("error") or "resolve failed")
     prereq = service_prereq_error()

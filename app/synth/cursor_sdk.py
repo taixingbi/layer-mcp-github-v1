@@ -11,7 +11,8 @@ import httpx
 
 from app.ask.blocks import AnswerContent, iter_text_chunks, parse_structured_answer
 from app.ask.prompts import ASK_MODE_APPENDIX, FOLLOW_UP_PROMPT, SYSTEM_PROMPT
-from app.config import cursor_api_key, cursor_model, cursor_runtime_cwd
+from app.clients.llm import EMPTY_USAGE
+from app.config import cursor_api_key, cursor_model, cursor_runtime_cwd, github_search_follow_ups
 from app.observability.correlation import UserContext
 from app.observability.logging_config import logger
 
@@ -121,17 +122,20 @@ class CursorSdkSynth:
                 extra={"cursor_run_id": run_id, "synth_engine": "cursor_sdk"},
             )
 
-        t_follow = time.perf_counter()
-        follow_content, follow_run_id = _run_agent_prompt(
-            _format_follow_up_prompt(question, answer, scope_label)
-        )
-        follow_ups = _parse_follow_ups(follow_content)
-        latency["follow_up_chat"] = int((time.perf_counter() - t_follow) * 1000)
-        if follow_run_id:
-            logger.info(
-                "cursor_sdk follow_up done",
-                extra={"cursor_run_id": follow_run_id, "synth_engine": "cursor_sdk"},
+        if github_search_follow_ups():
+            t_follow = time.perf_counter()
+            follow_content, follow_run_id = _run_agent_prompt(
+                _format_follow_up_prompt(question, answer, scope_label)
             )
+            follow_ups = _parse_follow_ups(follow_content)
+            latency["follow_up_chat"] = int((time.perf_counter() - t_follow) * 1000)
+            if follow_run_id:
+                logger.info(
+                    "cursor_sdk follow_up done",
+                    extra={"cursor_run_id": follow_run_id, "synth_engine": "cursor_sdk"},
+                )
+        else:
+            follow_ups = []
 
         return answer, follow_ups, latency, dict(_EMPTY_USAGE), dict(_EMPTY_USAGE)
 
@@ -173,6 +177,8 @@ class CursorSdkSynth:
         user: UserContext | None,
     ) -> tuple[list[str], dict[str, int]]:
         del client, conversation_id, request_id, session_id, trace_id, user
+        if not github_search_follow_ups():
+            return [], dict(EMPTY_USAGE)
         follow_content, follow_run_id = _run_agent_prompt(
             _format_follow_up_prompt(question, answer, scope_label)
         )

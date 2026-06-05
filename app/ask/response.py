@@ -30,7 +30,7 @@ def _user_meta(user: UserContext | None) -> dict[str, str]:
 
 def route_reason(*, scope: str, multi: bool) -> str:
     """Human-readable routing reason for ``meta.route``."""
-    if multi or scope == "all":
+    if multi or scope in ("all", "routed"):
         return "Deterministic multi-repo GitHub question"
     return f"Deterministic GitHub question for {scope}"
 

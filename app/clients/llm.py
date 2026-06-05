@@ -64,6 +64,13 @@ def llm_headers(
     return headers
 
 
+EMPTY_USAGE: dict[str, int] = {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+}
+
+
 def usage_block(data: dict[str, Any]) -> dict[str, int]:
     """Extract token usage from an OpenAI-style chat response object."""
     u = data.get("usage") or {}
