@@ -5,13 +5,16 @@ from __future__ import annotations
 import base64
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import httpx
 
 from app.clients.readme_cache import readme_cache_get, readme_cache_put
-from app.config import CODE_HITS_MAX, README_MAX, SNIPPET_MAX
+from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX, README_MAX, SNIPPET_MAX
+
+T = TypeVar("T")
 
 
 def github_token() -> str:
@@ -116,13 +119,24 @@ def fetch_path_files(
         if extra not in targets:
             targets.insert(0, extra)
 
+    slice_targets = targets[: min(len(targets), max(max_files * 2, max_files))]
+    workers = min(github_fetch_workers(), max(1, len(slice_targets)))
+    ordered: list[dict[str, str] | None] = [None] * len(slice_targets)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_fetch_file_content, client, owner, name, file_path): idx
+            for idx, file_path in enumerate(slice_targets)
+        }
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            ordered[idx] = fut.result()
+
     hits: list[dict[str, str]] = []
-    for file_path in targets:
-        if len(hits) >= max_files:
-            break
-        hit = _fetch_file_content(client, owner, name, file_path)
+    for hit in ordered:
         if hit:
             hits.append(hit)
+        if len(hits) >= max_files:
+            break
     return hits
 
 
@@ -280,3 +294,60 @@ def fetch_code_hits_multi(
             break
 
     return [_item_to_hit(item, full_names[0]) for item in items[:per_page]]
+
+
+def _timed_call(fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> tuple[T, int]:
+    """Run ``fn`` and return ``(result, duration_ms)``."""
+    t0 = time.perf_counter()
+    result = fn(*args, **kwargs)
+    return result, int((time.perf_counter() - t0) * 1000)
+
+
+def fetch_evidence_parallel(
+    client: httpx.Client,
+    full_names: list[str],
+    question: str,
+    *,
+    multi: bool,
+    path_prefix: str | None = None,
+) -> tuple[dict[str, str], list[dict[str, str]], dict[str, int]]:
+    """Fetch READMEs, code search, and optional path files concurrently."""
+    latency: dict[str, int] = {}
+    if not full_names:
+        return {}, [], latency
+
+    per_page = MULTI_REPO_CODE_HITS_MAX if multi else CODE_HITS_MAX
+    path_scope = bool(path_prefix and len(full_names) == 1)
+    workers = max(github_fetch_workers(), 3 if path_scope else 2)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        fut_readme = pool.submit(_timed_call, fetch_readmes_parallel, client, full_names)
+        fut_code = pool.submit(
+            _timed_call,
+            fetch_code_hits_multi,
+            client,
+            full_names,
+            question,
+            per_page=per_page,
+            path_prefix=path_prefix,
+        )
+        fut_path = None
+        if path_scope:
+            fut_path = pool.submit(
+                _timed_call,
+                fetch_path_files,
+                client,
+                full_names[0],
+                path_prefix,
+            )
+
+        readmes, latency["github_readme"] = fut_readme.result()
+        code_hits, code_ms = fut_code.result()
+        if fut_path is not None:
+            path_hits, path_ms = fut_path.result()
+            code_hits = _merge_code_hits(path_hits, code_hits)
+            latency["github_search"] = max(code_ms, path_ms)
+        else:
+            latency["github_search"] = code_ms
+
+    return readmes, code_hits, latency

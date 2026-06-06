@@ -83,7 +83,7 @@ Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.
 | `legacy` | `LLM_GATEWAY_BASE_URL` | Chat via inference gateway (`stream: true` on HTTP SSE) |
 | `cursor_sdk` | `CURSOR_API_KEY` | Ask-style synthesis via Cursor SDK `run.iter_text()` on HTTP SSE |
 
-GitHub retrieval (`gather_github_evidence`) is unchanged for both engines. MCP contract (`github_search`, SSE shape) is unchanged.
+GitHub retrieval (`gather_github_evidence`) runs README fetch, code search, and optional path file fetch **in parallel** (`fetch_evidence_parallel`). MCP contract (`github_search`, SSE shape) is unchanged.
 
 ## Design choices
 

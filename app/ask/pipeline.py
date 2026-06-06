@@ -7,13 +7,7 @@ from typing import Any
 
 import httpx
 
-from app.clients.github import (
-    _merge_code_hits,
-    fetch_code_hits_multi,
-    fetch_path_files,
-    fetch_readmes_parallel,
-)
-from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
+from app.clients.github import fetch_evidence_parallel
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
@@ -52,23 +46,14 @@ def gather_github_evidence(
     latency: dict[str, int] = {}
     scope_label = ", ".join(full_names)
 
-    t_gh = time.perf_counter()
-    readmes = fetch_readmes_parallel(client, full_names)
-    latency["github_readme"] = int((time.perf_counter() - t_gh) * 1000)
-
-    t_gh = time.perf_counter()
-    per_page = MULTI_REPO_CODE_HITS_MAX if multi else CODE_HITS_MAX
-    code_hits = fetch_code_hits_multi(
+    readmes, code_hits, gh_latency = fetch_evidence_parallel(
         client,
         full_names,
         question,
-        per_page=per_page,
+        multi=multi,
         path_prefix=path_prefix,
     )
-    if path_prefix and len(full_names) == 1:
-        path_hits = fetch_path_files(client, full_names[0], path_prefix)
-        code_hits = _merge_code_hits(path_hits, code_hits)
-    latency["github_search"] = int((time.perf_counter() - t_gh) * 1000)
+    latency.update(gh_latency)
 
     path_line = f"Path scope: {path_prefix}\n" if path_prefix else ""
 
