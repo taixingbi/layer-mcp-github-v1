@@ -79,3 +79,62 @@ def test_get_synth_backend_cursor(_mock_engine: MagicMock) -> None:
     from app.synth import get_synth_backend
 
     assert isinstance(get_synth_backend(), CursorSdkSynth)
+
+
+def test_legacy_iter_stream_forwards_gateway_tokens() -> None:
+    def fake_stream(*_args, **_kwargs):
+        yield ("delta", "Hel")
+        yield ("delta", "lo")
+        yield ("usage", {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3})
+        yield ("done", "Hello")
+
+    synth = LegacySynth()
+    with patch("app.synth.legacy.iter_chat_completion_stream", side_effect=fake_stream):
+        events = list(
+            synth.iter_stream(
+                httpx.Client(),
+                user_body="sources",
+                conversation_id="conv-1",
+                request_id="req-1",
+                session_id="ses-1",
+                trace_id=None,
+                user=None,
+            )
+        )
+
+    assert events[0] == ("delta", "Hel")
+    assert events[1] == ("delta", "lo")
+    assert events[2][0] == "usage"
+    assert events[3][0] == "done"
+    assert events[3][1].text == "Hello"
+
+
+@patch("cursor_sdk.Agent")
+def test_cursor_iter_stream_forwards_run_text(
+    mock_agent: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CURSOR_API_KEY", "cursor_test_key")
+    mock_run = MagicMock()
+    mock_run.run_id = "run-stream-1"
+    mock_run.iter_text.return_value = iter(["Hi", " there"])
+    mock_run.wait.return_value = MagicMock(status="finished", result="Hi there")
+    mock_agent.create.return_value.__enter__.return_value.send.return_value = mock_run
+
+    synth = CursorSdkSynth()
+    events = list(
+        synth.iter_stream(
+            httpx.Client(),
+            user_body="sources",
+            conversation_id="conv-1",
+            request_id="req-1",
+            session_id="ses-1",
+            trace_id=None,
+            user=None,
+        )
+    )
+
+    assert events[0] == ("delta", "Hi")
+    assert events[1] == ("delta", " there")
+    assert events[2][0] == "usage"
+    assert events[3][0] == "done"
+    assert events[3][1].text == "Hi there"

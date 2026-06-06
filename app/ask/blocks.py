@@ -199,7 +199,7 @@ def _fallback_paragraph(text: str) -> AnswerContent:
 
 
 def iter_text_chunks(text: str, *, chunk_size: int = 48):
-    """Yield fixed-size chunks for SSE ``delta`` events after buffered synthesis."""
+    """Yield fixed-size chunks (tests and legacy replay helpers)."""
     if not text:
         return
     for i in range(0, len(text), chunk_size):

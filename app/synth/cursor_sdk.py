@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from app.ask.blocks import AnswerContent, iter_text_chunks, resolve_answer_content
+from app.ask.blocks import resolve_answer_content
 from app.ask.prompts import ASK_MODE_APPENDIX, FOLLOW_UP_PROMPT, system_prompt
 from app.clients.llm import EMPTY_USAGE
 from app.config import cursor_api_key, cursor_model, cursor_runtime_cwd, github_search_follow_ups
@@ -151,15 +151,37 @@ class CursorSdkSynth:
         user: UserContext | None,
     ) -> Iterator[tuple[str, Any]]:
         del client, conversation_id, request_id, session_id, trace_id, user
-        raw_answer, run_id = _run_agent_prompt(_format_synth_prompt(user_body))
-        if run_id:
-            logger.info(
-                "cursor_sdk stream start",
-                extra={"cursor_run_id": run_id, "synth_engine": "cursor_sdk"},
-            )
+        from cursor_sdk import Agent, CursorAgentError
+
+        prompt = _format_synth_prompt(user_body)
+        parts: list[str] = []
+        run_id: str | None = None
+        result: Any = None
+        try:
+            with Agent.create(_agent_options()) as agent:
+                run = agent.send(prompt)
+                run_id = getattr(run, "run_id", None)
+                if run_id:
+                    logger.info(
+                        "cursor_sdk stream start",
+                        extra={"cursor_run_id": run_id, "synth_engine": "cursor_sdk"},
+                    )
+                for chunk in run.iter_text():
+                    text = str(chunk)
+                    if text:
+                        parts.append(text)
+                        yield ("delta", text)
+                result = run.wait()
+        except CursorAgentError as exc:
+            raise ValueError(f"Cursor SDK startup failed: {exc}") from exc
+
+        if result is not None and getattr(result, "status", None) == "error":
+            raise ValueError(f"Cursor SDK run failed: {run_id or 'unknown'}")
+
+        raw_answer = "".join(parts).strip() or _extract_result_text(result)
+        if not raw_answer:
+            raise ValueError("Cursor SDK returned no content")
         answer_content = resolve_answer_content(raw_answer)
-        for chunk in iter_text_chunks(answer_content.text):
-            yield ("delta", chunk)
         yield ("usage", dict(_EMPTY_USAGE))
         yield ("done", answer_content)
 

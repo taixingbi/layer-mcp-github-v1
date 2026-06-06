@@ -100,8 +100,8 @@ When **both** `Accept: text/event-stream` and `tools/call` with `github_search` 
 
 | Event | Body | Notes |
 |-------|------|-------|
-| `meta` | `{ "meta": { ... } }` | Once at start (no duplicate correlation fields on `delta` / `done`) |
-| `delta` | `{ "answer": { "text": "..." } }` | Answer text chunks only |
+| `meta` | `{ "meta": { ... } }` | Once at start (no duplicate correlation fields on `answer_delta` / `done`) |
+| `answer_delta` | `{ "text": "..." }` | Answer text chunks from upstream gateway or Cursor SDK (not fixed-size replay) |
 | `done` | Full tool payload | Same fields as buffered `structuredContent` (no extra wrapper keys) |
 | `error` | JSON-RPC 2.0 error | `error.data` may contain the failed tool payload (`status.ok: false`) |
 

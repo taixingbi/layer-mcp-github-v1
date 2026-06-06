@@ -58,7 +58,7 @@ GitHub API     SYNTH_ENGINE
 | Mode | Behavior |
 |------|----------|
 | stdio + `stream: true` | MCP progress + logs; final JSON |
-| HTTP `/v1/mcp` + SSE Accept + `stream: true` | `meta`, `delta`, `done` events |
+| HTTP `/v1/mcp` + SSE Accept + `stream: true` | `meta`, `answer_delta` (gateway/Cursor tokens), `done` |
 | HTTP `/v1/mcp` buffered | JSON-RPC `structuredContent` |
 
 ## Observability
@@ -80,8 +80,8 @@ Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.
 
 | Engine | Required env | Role |
 |--------|----------------|------|
-| `legacy` | `LLM_GATEWAY_BASE_URL` | Chat + follow-ups via inference gateway |
-| `cursor_sdk` | `CURSOR_API_KEY` | Ask-style read-only synthesis via Cursor SDK (`CURSOR_MODEL`, `CURSOR_RUNTIME_CWD`) |
+| `legacy` | `LLM_GATEWAY_BASE_URL` | Chat via inference gateway (`stream: true` on HTTP SSE) |
+| `cursor_sdk` | `CURSOR_API_KEY` | Ask-style synthesis via Cursor SDK `run.iter_text()` on HTTP SSE |
 
 GitHub retrieval (`gather_github_evidence`) is unchanged for both engines. MCP contract (`github_search`, SSE shape) is unchanged.
 

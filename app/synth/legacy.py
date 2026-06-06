@@ -8,9 +8,15 @@ from typing import Any
 
 import httpx
 
-from app.ask.blocks import AnswerContent, iter_text_chunks, resolve_answer_content
+from app.ask.blocks import resolve_answer_content
 from app.ask.common import chat_messages
-from app.clients.llm import EMPTY_USAGE, chat_completion, generate_follow_ups, llm_gateway_base
+from app.clients.llm import (
+    EMPTY_USAGE,
+    chat_completion,
+    generate_follow_ups,
+    iter_chat_completion_stream,
+    llm_gateway_base,
+)
 from app.config import github_search_follow_ups
 from app.observability.correlation import UserContext
 
@@ -82,7 +88,7 @@ class LegacySynth:
         trace_id: str | None,
         user: UserContext | None,
     ) -> Iterator[tuple[str, Any]]:
-        raw_answer, usage = chat_completion(
+        for kind, payload in iter_chat_completion_stream(
             client,
             messages=chat_messages(user_body),
             conversation_id=conversation_id,
@@ -90,12 +96,13 @@ class LegacySynth:
             session_id=session_id,
             trace_id=trace_id,
             user=user,
-        )
-        answer_content = resolve_answer_content(raw_answer)
-        for chunk in iter_text_chunks(answer_content.text):
-            yield ("delta", chunk)
-        yield ("usage", usage)
-        yield ("done", answer_content)
+        ):
+            if kind == "delta":
+                yield ("delta", payload)
+            elif kind == "usage":
+                yield ("usage", payload)
+            elif kind == "done":
+                yield ("done", resolve_answer_content(str(payload)))
 
     def follow_ups(
         self,
