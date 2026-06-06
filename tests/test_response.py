@@ -6,6 +6,7 @@ from app.ask.response import (
     build_tool_error,
     build_tool_response,
     route_reason,
+    stream_answer_delta_event,
     stream_delta_event,
     stream_meta_event,
     tool_metrics_key,
@@ -92,4 +93,4 @@ def test_stream_events_no_duplicate_meta() -> None:
         multi=False,
     )
     assert list(meta) == ["meta"]
-    assert stream_delta_event("chunk") == {"answer": {"text": "chunk"}}
+    assert stream_answer_delta_event("chunk") == {"text": "chunk"}

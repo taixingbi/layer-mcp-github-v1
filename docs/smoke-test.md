@@ -96,7 +96,7 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
   }' | tee /tmp/mcp-stream.txt
 ```
 
-**Pass:** SSE lines with `event: meta`, `event: delta`, `event: done`; first `meta` data has `.meta.request_id` `req-mcp-stream-1`.
+**Pass:** SSE lines with `event: meta`, `event: answer_delta`, `event: done`; first `meta` data has `.meta.request_id` `req-mcp-stream-1`.
 
 **Final JSON from `done`:**
 

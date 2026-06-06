@@ -306,6 +306,10 @@ def stream_meta_event(
     }
 
 
-def stream_delta_event(text: str) -> dict[str, Any]:
-    """SSE ``delta`` event body (answer text chunk only)."""
-    return {"answer": {"text": text}}
+def stream_answer_delta_event(text: str) -> dict[str, Any]:
+    """SSE ``answer_delta`` event body (answer text chunk only)."""
+    return {"text": text}
+
+
+# Backward-compatible alias for internal callers.
+stream_delta_event = stream_answer_delta_event

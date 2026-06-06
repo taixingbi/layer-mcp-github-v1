@@ -30,7 +30,7 @@ from .common import (
     tool_error_response,
 )
 from .pipeline import finish_github_search_result, gather_github_evidence
-from .response import stream_delta_event, stream_meta_event
+from .response import stream_answer_delta_event, stream_meta_event
 from .sse import parse_sse_frame, sse_format
 
 
@@ -51,7 +51,7 @@ async def stream_github_search_events(
     tool_name: str = "github_search",
     jsonrpc_id: str | int | None = None,
 ) -> AsyncIterator[str]:
-    """Yield SSE: ``meta`` (once), ``delta`` (answer text chunks), ``done`` (full payload)."""
+    """Yield SSE: ``meta`` (once), ``answer_delta`` (answer text chunks), ``done`` (full payload)."""
     from app.mcp.jsonrpc import INTERNAL_ERROR, INVALID_PARAMS, sse_error_frame
 
     rid, sid, tid, conv = resolve_correlation(
@@ -160,7 +160,7 @@ async def stream_github_search_events(
                         text = str(payload)
                         if on_token:
                             on_token(text)
-                        yield sse_format("delta", stream_delta_event(text))
+                        yield sse_format("answer_delta", stream_answer_delta_event(text))
                     elif kind == "usage":
                         chat_usage = payload
                     elif kind == "done":
@@ -289,8 +289,8 @@ async def github_search_mcp_stream(
         event, data = parse_sse_frame(frame)
 
         if ctx:
-            if event == "delta":
-                text = (data.get("answer") or {}).get("text") or ""
+            if event == "answer_delta":
+                text = data.get("text") or (data.get("answer") or {}).get("text") or ""
                 if text:
                     await ctx.info(json.dumps({"type": "answer_delta", "text": text}))
             elif event == "error":
