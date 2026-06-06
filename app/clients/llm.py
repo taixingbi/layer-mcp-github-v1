@@ -86,7 +86,7 @@ def _chat_payload(
     conversation_id: str,
     *,
     max_tokens: int | None = None,
-    stream: bool = False,
+    stream: bool = True,
 ) -> dict[str, Any]:
     """Shared JSON body for buffered and streaming chat completion calls."""
     payload: dict[str, Any] = {
@@ -95,9 +95,8 @@ def _chat_payload(
         "messages": messages,
         "max_tokens": max_tokens if max_tokens is not None else llm_max_tokens(),
         "temperature": llm_temperature(),
+        "stream": bool(stream),
     }
-    if stream:
-        payload["stream"] = True
     return payload
 
 
@@ -117,7 +116,7 @@ def chat_completion(
     if not base:
         raise ValueError("LLM_GATEWAY_BASE_URL not set in .env")
 
-    payload = _chat_payload(messages, conversation_id, max_tokens=max_tokens)
+    payload = _chat_payload(messages, conversation_id, max_tokens=max_tokens, stream=False)
     headers = llm_headers(
         request_id=request_id, session_id=session_id, trace_id=trace_id, user=user
     )
