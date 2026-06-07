@@ -1,5 +1,5 @@
 # layer-mcp-github-v1: MCP streamable-http on port 8000.
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 ARG APP_VERSION=dev
 ARG GIT_SHA=unknown
