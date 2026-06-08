@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.ask.blog_links import citation_for_code_hit
 from app.config import (
     LLM_CONTEXT_README_MAX,
     MULTI_REPO_README_MAX,
@@ -41,25 +42,12 @@ def build_citations(
         idx += 1
     seen_urls: set[str] = set()
     for hit in code_hits:
-        repo = hit.get("repo") or full_name
-        path = hit.get("path") or ""
-        url = (hit.get("url") or "").strip()
-        if not url and path:
-            url = f"https://github.com/{repo}/blob/HEAD/{path}"
+        row = citation_for_code_hit(hit, full_name=full_name)
+        url = (row.get("url") or "").strip()
         if not url or url in seen_urls:
             continue
         seen_urls.add(url)
-        short = repo.split("/", 1)[-1] if "/" in repo else repo
-        label = f"{short}/{path}" if path else path or url
-        citations.append(
-            {
-                "index": idx,
-                "url": url,
-                "label": label,
-                "repo": repo,
-                "type": "code",
-            }
-        )
+        citations.append({"index": idx, **row})
         idx += 1
     if not citations:
         citations.append(

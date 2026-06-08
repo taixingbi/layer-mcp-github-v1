@@ -37,9 +37,10 @@ Presentation rules:
 - Treat repository names as implementation details; do not put repo slugs in component bullets.
 - Put repository links in a separate Repositories subsection under Learn More, not inline in component lists.
 - When Sources contain URLs, prefer markdown links [label](url) over citation-only references like blog posts[2]-[9].
+- Sources whose URL starts with ``/blog/`` are published HuntAI documentation pages (not GitHub). In Learn More → Documentation, link them with ``[friendly title](/blog/slug)`` using that URL exactly — never GitHub blob URLs for ``app/blog`` articles.
 - Add a ## Learn More section when Sources include docs, blog posts, or repos. Group links when helpful:
-  - Documentation — architecture or design articles
-  - Repositories — GitHub repo links with friendly labels
+  - Documentation — ``/blog/…`` architecture or design articles from Sources
+  - Repositories — GitHub repo links with friendly labels (README / repo home only)
 - Use compact vertical ASCII diagrams (User → Web App → Gateway → Orchestrator → tools), not arrow chains in one line.
 - Example diagram shape:
   User

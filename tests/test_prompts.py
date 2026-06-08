@@ -24,6 +24,7 @@ def test_text_prompt_presentation_rules(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("GITHUB_SEARCH_ANSWER_FORMAT", "text")
     assert "architecture wiki" in TEXT_SYSTEM_PROMPT
     assert "Learn More" in TEXT_SYSTEM_PROMPT
+    assert "/blog/" in TEXT_SYSTEM_PROMPT
     assert "product or service names" in TEXT_SYSTEM_PROMPT
     assert "repository names as implementation details" in TEXT_SYSTEM_PROMPT
     assert "markdown headings" in TEXT_SYSTEM_PROMPT

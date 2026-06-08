@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from app.ask.blog_links import rewrite_blog_urls_in_text
 from app.config import github_search_answer_format
 
 ANSWER_FORMAT_BLOCKS = "blocks"
@@ -140,16 +141,45 @@ def _strip_json_fences(raw: str) -> str:
     return text
 
 
+def _normalize_answer_content(content: AnswerContent) -> AnswerContent:
+    text = rewrite_blog_urls_in_text(content.text)
+    blocks = content.blocks
+    if blocks:
+        blocks = []
+        for block in content.blocks:
+            row = dict(block)
+            if isinstance(row.get("text"), str):
+                row["text"] = rewrite_blog_urls_in_text(row["text"])
+            if isinstance(row.get("items"), list):
+                row["items"] = [
+                    rewrite_blog_urls_in_text(str(item)) for item in row["items"]
+                ]
+            if isinstance(row.get("description"), str):
+                row["description"] = rewrite_blog_urls_in_text(row["description"])
+            blocks.append(row)
+    notes = [rewrite_blog_urls_in_text(str(note)) for note in content.notes]
+    if text == content.text and blocks == content.blocks and notes == content.notes:
+        return content
+    return AnswerContent(
+        text=text,
+        blocks=blocks,
+        notes=notes,
+        format=content.format,
+    )
+
+
 def parse_text_answer(raw: str) -> AnswerContent:
     """Use LLM prose directly for the original text-only answer schema."""
     text = raw.strip()
-    return AnswerContent(text=text, blocks=[], notes=[], format=ANSWER_FORMAT_TEXT)
+    return _normalize_answer_content(
+        AnswerContent(text=text, blocks=[], notes=[], format=ANSWER_FORMAT_TEXT),
+    )
 
 
 def resolve_answer_content(raw: str) -> AnswerContent:
     """Parse synthesis output according to ``GITHUB_SEARCH_ANSWER_FORMAT``."""
     if github_search_answer_format() == "blocks":
-        return parse_structured_answer(raw)
+        return _normalize_answer_content(parse_structured_answer(raw))
     return parse_text_answer(raw)
 
 
