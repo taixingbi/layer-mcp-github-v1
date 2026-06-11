@@ -315,7 +315,6 @@ def fetch_evidence_parallel(
     latency: dict[str, int] = {}
     if not full_names:
         return {}, [], latency
-
     per_page = multi_repo_code_hits_max() if multi else CODE_HITS_MAX
     path_scope = bool(path_prefix and len(full_names) == 1)
     workers = max(github_fetch_workers(), 3 if path_scope else 2)

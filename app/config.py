@@ -28,7 +28,6 @@ def llm_user_body_max_chars() -> int:
     """Max characters for the github_search LLM user message (sources + question)."""
     return int(os.environ.get("LLM_USER_BODY_MAX_CHARS", str(LLM_USER_BODY_MAX_CHARS)))
 
-
 def multi_repo_code_hits_max() -> int:
     """Max code-search hits merged across repos for multi-repo github_search."""
     return int(os.environ.get("MULTI_REPO_CODE_HITS_MAX", str(MULTI_REPO_CODE_HITS_MAX)))
