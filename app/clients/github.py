@@ -12,7 +12,7 @@ from typing import Any, Callable, TypeVar
 import httpx
 
 from app.clients.readme_cache import readme_cache_get, readme_cache_put
-from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX, README_MAX, SNIPPET_MAX
+from app.config import CODE_HITS_MAX, README_MAX, SNIPPET_MAX, multi_repo_code_hits_max
 
 T = TypeVar("T")
 
@@ -316,7 +316,7 @@ def fetch_evidence_parallel(
     if not full_names:
         return {}, [], latency
 
-    per_page = MULTI_REPO_CODE_HITS_MAX if multi else CODE_HITS_MAX
+    per_page = multi_repo_code_hits_max() if multi else CODE_HITS_MAX
     path_scope = bool(path_prefix and len(full_names) == 1)
     workers = max(github_fetch_workers(), 3 if path_scope else 2)
 

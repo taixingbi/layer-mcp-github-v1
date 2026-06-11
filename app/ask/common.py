@@ -168,12 +168,26 @@ def log_ask_done(
     )
 
 
+def _upstream_http_label(exc: httpx.HTTPStatusError) -> str:
+    """Classify httpx upstream for logs and client errors."""
+    url = str(exc.request.url)
+    if "api.github.com" in url:
+        return "github"
+    if "/v1/chat/completions" in url:
+        return "llm_gateway"
+    return "upstream"
+
+
 def log_ask_exception(exc: BaseException, *, stream: bool) -> None:
     """Log an upstream/transport exception with ``logger.exception``."""
     extra: dict[str, Any] = {"error_type": type(exc).__name__}
     if isinstance(exc, httpx.HTTPStatusError):
         extra["upstream_status"] = exc.response.status_code
-        msg = f"github_search{' stream' if stream else ''} upstream status={exc.response.status_code}"
+        extra["upstream"] = _upstream_http_label(exc)
+        msg = (
+            f"github_search{' stream' if stream else ''} "
+            f"{extra['upstream']} status={exc.response.status_code}"
+        )
     else:
         msg = f"github_search{' stream' if stream else ''} failed"
     logger.exception(msg, extra=extra)
@@ -182,7 +196,12 @@ def log_ask_exception(exc: BaseException, *, stream: bool) -> None:
 def httpx_error_message(exc: BaseException) -> str:
     """Map httpx/ValueError exceptions to a client-facing error string."""
     if isinstance(exc, httpx.HTTPStatusError):
-        return f"GitHub API error: {exc.response.status_code}"
+        label = _upstream_http_label(exc)
+        if label == "github":
+            return f"GitHub API error: {exc.response.status_code}"
+        if label == "llm_gateway":
+            return f"LLM gateway error: {exc.response.status_code}"
+        return f"Upstream HTTP error: {exc.response.status_code}"
     if isinstance(exc, httpx.HTTPError):
         return f"Request failed: {exc}"
     return str(exc)
