@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse, Response
 
 from app.allowlist.repos import ALLOWED_REPOS
 from app.clients.github import gh_headers, github_token
+from app.config import cursor_api_key, synth_engine
 from app.clients.llm import llm_api_key, llm_gateway_base, llm_headers
 from app.build_info import SERVICE_NAME, version_payload
 from app.version import app_version
@@ -43,9 +44,19 @@ def _config_checks() -> tuple[dict[str, bool], list[str]]:
     if not checks["allowlist"]:
         errors.append("allowlist is empty")
 
-    checks["llm_gateway_config"] = bool(llm_gateway_base())
-    if not checks["llm_gateway_config"]:
-        errors.append("LLM_GATEWAY_BASE_URL not set")
+    engine = synth_engine()
+    checks["synth_engine"] = engine in ("legacy", "cursor_sdk")
+
+    if engine == "cursor_sdk":
+        checks["cursor_api_key"] = bool(cursor_api_key())
+        if not checks["cursor_api_key"]:
+            errors.append("CURSOR_API_KEY not set")
+        checks["llm_gateway_config"] = True
+    else:
+        checks["cursor_api_key"] = True
+        checks["llm_gateway_config"] = bool(llm_gateway_base())
+        if not checks["llm_gateway_config"]:
+            errors.append("LLM_GATEWAY_BASE_URL not set")
 
     return checks, errors
 
@@ -102,13 +113,20 @@ def run_readiness_checks() -> dict[str, Any]:
         else:
             checks["github_api"] = False
 
-        if checks.get("llm_gateway_config"):
+        if synth_engine() == "cursor_sdk":
+            checks["llm_gateway"] = True
+            checks["cursor_sdk"] = bool(cursor_api_key())
+            if not checks["cursor_sdk"]:
+                errors.append("CURSOR_API_KEY not set")
+        elif checks.get("llm_gateway_config"):
             ok, detail = _probe_llm_gateway(client)
             checks["llm_gateway"] = ok
+            checks["cursor_sdk"] = True
             if not ok and detail:
                 errors.append(detail)
         else:
             checks["llm_gateway"] = False
+            checks["cursor_sdk"] = True
 
     ready = all(checks.values()) and not errors
     return {

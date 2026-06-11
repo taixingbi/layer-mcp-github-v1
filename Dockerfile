@@ -1,5 +1,5 @@
 # layer-mcp-github-v1: MCP streamable-http on port 8000.
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 ARG APP_VERSION=dev
 ARG GIT_SHA=unknown
@@ -25,7 +25,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY app ./app
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[cursor]"
 
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 1000 appuser \
     && chown -R appuser:appuser /app

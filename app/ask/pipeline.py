@@ -7,13 +7,15 @@ from typing import Any
 
 import httpx
 
-from app.clients.github import fetch_code_hits_multi, fetch_readme
-from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
+from app.clients.github import fetch_evidence_parallel
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
+from .blocks import AnswerContent, resolve_answer_content
+from .path_scope import resolve_search_inputs
 from .citations import (
     build_citations,
+    clamp_llm_user_body,
     format_multi_repo_sources,
     format_sources_for_llm,
     merge_citations,
@@ -37,21 +39,23 @@ def gather_github_evidence(
     full_names: list[str],
     question: str,
     multi: bool,
+    *,
+    path_prefix: str | None = None,
 ) -> tuple[list[dict[str, Any]], str, dict[str, int], dict[str, str], list[dict[str, str]]]:
     """Fetch READMEs and code search hits; build citations and LLM user message body."""
     latency: dict[str, int] = {}
     scope_label = ", ".join(full_names)
 
-    t_gh = time.perf_counter()
-    readmes: dict[str, str] = {}
-    for fn in full_names:
-        readmes[fn] = fetch_readme(client, fn)
-    latency["github_readme"] = int((time.perf_counter() - t_gh) * 1000)
+    readmes, code_hits, gh_latency = fetch_evidence_parallel(
+        client,
+        full_names,
+        question,
+        multi=multi,
+        path_prefix=path_prefix,
+    )
+    latency.update(gh_latency)
 
-    t_gh = time.perf_counter()
-    per_page = MULTI_REPO_CODE_HITS_MAX if multi else CODE_HITS_MAX
-    code_hits = fetch_code_hits_multi(client, full_names, question, per_page=per_page)
-    latency["github_search"] = int((time.perf_counter() - t_gh) * 1000)
+    path_line = f"Path scope: {path_prefix}\n" if path_prefix else ""
 
     if multi:
         blocks: list[tuple[str, list[dict[str, Any]]]] = []
@@ -73,6 +77,7 @@ def gather_github_evidence(
         citations = merge_citations(blocks)
         user_body = (
             f"Repositories ({len(full_names)} allowlisted): {scope_label}\n"
+            f"{path_line}"
             f"User question: {question}\n\n"
             f"{format_multi_repo_sources(citations, readmes, code_hits)}"
         )
@@ -81,10 +86,13 @@ def gather_github_evidence(
         readme = readmes[full_name]
         citations = build_citations(full_name, readme, code_hits)
         user_body = (
-            f"Repository: {full_name}\nUser question: {question}\n\n"
+            f"Repository: {full_name}\n"
+            f"{path_line}"
+            f"User question: {question}\n\n"
             f"{format_sources_for_llm(citations, readme, code_hits)}"
         )
 
+    user_body = clamp_llm_user_body(user_body)
     return citations, user_body, latency, readmes, code_hits
 
 
@@ -96,7 +104,7 @@ def finish_github_search_result(
     question: str,
     is_new_conv: bool,
     citations: list[dict[str, Any]],
-    answer: str,
+    answer: str | AnswerContent,
     follow_ups: list[str],
     latency: dict[str, int],
     chat_usage: dict[str, int],
@@ -107,9 +115,15 @@ def finish_github_search_result(
     conv: str,
     t0: float,
     user: UserContext | None,
+    path: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the standard tool response payload."""
     latency["total"] = int((time.perf_counter() - t0) * 1000)
+    answer_content = (
+        answer
+        if isinstance(answer, AnswerContent)
+        else resolve_answer_content(str(answer))
+    )
     return build_tool_response(
         request_id=rid,
         session_id=sid,
@@ -121,12 +135,13 @@ def finish_github_search_result(
         question=question,
         is_new_conversation=is_new_conv,
         multi=multi,
-        answer_text=answer,
+        answer_content=answer_content,
         internal_citations=citations,
         follow_up_questions=follow_ups,
         internal_latency=latency,
         chat_usage=chat_usage,
         follow_usage=follow_usage,
+        path=path,
     )
 
 
@@ -134,6 +149,7 @@ def github_search_impl(
     repo: str | None,
     question: str,
     *,
+    path: str | None = None,
     request_id: str | None = None,
     session_id: str | None = None,
     trace_id: str | None = None,
@@ -176,7 +192,8 @@ def github_search_impl(
         method=http_method,
         path=http_path,
     ):
-        scope, err_msg = resolve_ask_scope_or_error(repo)
+        repo, question, path = resolve_search_inputs(repo, question, path)
+        scope, err_msg = resolve_ask_scope_or_error(repo, question=question)
         if err_msg is not None:
             return _fail(err_msg)
 
@@ -188,7 +205,11 @@ def github_search_impl(
         try:
             with httpx.Client(timeout=httpx.Timeout(30.0, read=120.0)) as client:
                 citations, user_body, gh_latency, readmes, code_hits = gather_github_evidence(
-                    client, scope.full_names, question, scope.multi
+                    client,
+                    scope.full_names,
+                    question,
+                    scope.multi,
+                    path_prefix=path,
                 )
                 latency.update(gh_latency)
                 log_ask_github_done(len(citations), gh_latency, stream=stream)
@@ -233,6 +254,7 @@ def github_search_impl(
             conv=conv,
             t0=t0,
             user=user,
+            path=path,
         )
         log_ask_done(
             scope,

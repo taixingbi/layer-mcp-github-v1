@@ -4,6 +4,8 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 
 **No REST API** — only stdio MCP (Cursor) or `POST /v1/mcp` (streamable-http with `--http`).
 
+**Synthesis:** `SYNTH_ENGINE=legacy` (default, LLM gateway) or `cursor_sdk` (Cursor SDK). Tool arguments and response shape are identical; only the answer-generation backend differs ([design.md](design.md)).
+
 ---
 
 ## Endpoint
@@ -28,7 +30,7 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `question` | yes | — | User question |
-| `repo` | no | all allowlisted | Short name or `owner/name` |
+| `repo` | no | ranked subset (`GITHUB_REPO_ROUTING`) or full allowlist | Short name or `owner/name` |
 | `stream` | no | `true` | `false` → buffered JSON-RPC result; `true` (default) → SSE on HTTP `/v1/mcp` when Accept allows |
 | `request_id` | no | env / UUID | `X-Request-Id` to gateway |
 | `session_id` | no | env / UUID | `X-Session-Id` |
@@ -44,8 +46,19 @@ JSON-RPC result with `.result.structuredContent` (same object as stream `done`):
 | Top-level | Description |
 |-----------|-------------|
 | `meta` | Correlation ids, `is_new_conversation`, `user`, `route`, `tool` (`github_search`), `rewrite`, `github` (`scope`, `repos`, optional `repo`) |
-| `answer` | `text`, `citations[]` with `cite_id` and `source` only |
-| `follow_up_questions` | string array |
+| `answer` | `format` (`blocks`), `text` (markdown derived from blocks), `blocks[]`, `notes[]`, `citations[]` with `cite_id` and `source` |
+
+### `answer.blocks` types
+
+| `type` | Fields |
+|--------|--------|
+| `heading` | `text`, `cite_ids[]` |
+| `paragraph` | `text`, `cite_ids[]` |
+| `list` | `items[]`, `cite_ids[]` |
+| `service` | `name`, `description`, optional `role`, `endpoint`, `service_type`, `cite_ids[]` |
+
+`answer.notes` lists evidence gaps (sources insufficient). `answer.text` is generated server-side from blocks for streaming and legacy clients.
+| `follow_up_questions` | string array (empty unless `GITHUB_SEARCH_FOLLOW_UPS=true`) |
 | `latency_ms` | `total` plus `tool_github_search` breakdown |
 | `usage` | `total` token counts only |
 | `status` | `ok`, `state`, `code` (`ok` / `failed`; `message` on failure) |
@@ -87,8 +100,8 @@ When **both** `Accept: text/event-stream` and `tools/call` with `github_search` 
 
 | Event | Body | Notes |
 |-------|------|-------|
-| `meta` | `{ "meta": { ... } }` | Once at start (no duplicate correlation fields on `delta` / `done`) |
-| `delta` | `{ "answer": { "text": "..." } }` | Answer text chunks only |
+| `meta` | `{ "meta": { ... } }` | Once at start (no duplicate correlation fields on `answer_delta` / `done`) |
+| `answer_delta` | `{ "text": "..." }` | Answer text chunks from upstream gateway or Cursor SDK (not fixed-size replay) |
 | `done` | Full tool payload | Same fields as buffered `structuredContent` (no extra wrapper keys) |
 | `error` | JSON-RPC 2.0 error | `error.data` may contain the failed tool payload (`status.ok: false`) |
 

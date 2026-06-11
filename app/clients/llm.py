@@ -31,7 +31,7 @@ def llm_api_key() -> str:
 
 def llm_max_tokens() -> int:
     """Default max_tokens for github_search chat completions (completion length cap)."""
-    return int(os.environ.get("LLM_MAX_TOKENS", "384"))
+    return int(os.environ.get("LLM_MAX_TOKENS", "512"))
 
 
 def llm_temperature() -> float:
@@ -64,6 +64,13 @@ def llm_headers(
     return headers
 
 
+EMPTY_USAGE: dict[str, int] = {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+}
+
+
 def usage_block(data: dict[str, Any]) -> dict[str, int]:
     """Extract token usage from an OpenAI-style chat response object."""
     u = data.get("usage") or {}
@@ -79,7 +86,7 @@ def _chat_payload(
     conversation_id: str,
     *,
     max_tokens: int | None = None,
-    stream: bool = False,
+    stream: bool = True,
 ) -> dict[str, Any]:
     """Shared JSON body for buffered and streaming chat completion calls."""
     payload: dict[str, Any] = {
@@ -88,9 +95,8 @@ def _chat_payload(
         "messages": messages,
         "max_tokens": max_tokens if max_tokens is not None else llm_max_tokens(),
         "temperature": llm_temperature(),
+        "stream": bool(stream),
     }
-    if stream:
-        payload["stream"] = True
     return payload
 
 
@@ -110,7 +116,7 @@ def chat_completion(
     if not base:
         raise ValueError("LLM_GATEWAY_BASE_URL not set in .env")
 
-    payload = _chat_payload(messages, conversation_id, max_tokens=max_tokens)
+    payload = _chat_payload(messages, conversation_id, max_tokens=max_tokens, stream=False)
     headers = llm_headers(
         request_id=request_id, session_id=session_id, trace_id=trace_id, user=user
     )

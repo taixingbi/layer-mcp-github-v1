@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from app.allowlist.rank import github_repo_routing_enabled, github_route_max_repos, rank_repos_for_question
 from app.allowlist.repos import ALLOWED_REPOS
 
 
@@ -62,8 +63,8 @@ def resolve_repo(repo: str) -> dict[str, Any]:
     return _resolve_single_repo(raw, allowed, owner)
 
 
-def resolve_repos(repo: str | None = None) -> dict[str, Any]:
-    """Resolve one repo or all allowlisted repos when ``repo`` is omitted."""
+def resolve_repos(repo: str | None = None, *, question: str | None = None) -> dict[str, Any]:
+    """Resolve one repo, a question-ranked subset, or full allowlist when ``repo`` is omitted."""
     allowed = allowed_short_names()
     if not allowed:
         return fail("allowlist is empty")
@@ -74,6 +75,26 @@ def resolve_repos(repo: str | None = None) -> dict[str, Any]:
 
     raw = (repo or "").strip()
     if not raw:
+        if github_repo_routing_enabled() and (question or "").strip():
+            shorts = rank_repos_for_question(
+                question or "",
+                allowed,
+                max_repos=github_route_max_repos(),
+            )
+            full_names = [f"{owner}/{short}" for short in shorts]
+            if len(full_names) == 1:
+                return {
+                    "ok": True,
+                    "full_names": full_names,
+                    "shorts": shorts,
+                    "scope": full_names[0],
+                }
+            return {
+                "ok": True,
+                "full_names": full_names,
+                "shorts": shorts,
+                "scope": "routed",
+            }
         return {
             "ok": True,
             "full_names": [f"{owner}/{short}" for short in allowed],

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.ask.blocks import ANSWER_FORMAT_BLOCKS, ANSWER_FORMAT_TEXT, AnswerContent
 from app.observability.correlation import UserContext
 
 TOOL_API_VERSION = "v1"
@@ -29,7 +30,7 @@ def _user_meta(user: UserContext | None) -> dict[str, str]:
 
 def route_reason(*, scope: str, multi: bool) -> str:
     """Human-readable routing reason for ``meta.route``."""
-    if multi or scope == "all":
+    if multi or scope in ("all", "routed"):
         return "Deterministic multi-repo GitHub question"
     return f"Deterministic GitHub question for {scope}"
 
@@ -64,8 +65,8 @@ def build_meta(
     is_new_conversation: bool = False,
     multi: bool = False,
     logical_tool: str = GITHUB_SEARCH_TOOL,
+    path: str | None = None,
 ) -> dict[str, Any]:
-    """``meta`` block for tool responses and stream ``meta`` events."""
     scope_val = scope or repo or logical_tool
     meta: dict[str, Any] = {
         "request_id": request_id,
@@ -90,6 +91,8 @@ def build_meta(
         github["repos"] = repos
     if repo is not None:
         github["repo"] = repo
+    if path:
+        github["path"] = path
     if github:
         meta["github"] = github
     return meta
@@ -156,6 +159,24 @@ def _status_failed(message: str) -> dict[str, Any]:
     return {"ok": False, "state": "failed", "code": "failed", "message": message}
 
 
+def build_answer_payload(
+    *,
+    answer_content: AnswerContent,
+    internal_citations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """``answer`` object with text, citations, and optional structured blocks."""
+    fmt = answer_content.format or ANSWER_FORMAT_TEXT
+    payload: dict[str, Any] = {
+        "text": answer_content.text,
+        "citations": citations_for_answer(internal_citations),
+    }
+    if fmt == ANSWER_FORMAT_BLOCKS:
+        payload["format"] = ANSWER_FORMAT_BLOCKS
+        payload["blocks"] = list(answer_content.blocks)
+        payload["notes"] = list(answer_content.notes)
+    return payload
+
+
 def build_tool_response(
     *,
     request_id: str,
@@ -168,15 +189,15 @@ def build_tool_response(
     question: str,
     is_new_conversation: bool,
     multi: bool,
-    answer_text: str,
+    answer_content: AnswerContent,
     internal_citations: list[dict[str, Any]],
     follow_up_questions: list[str],
     internal_latency: dict[str, int],
     chat_usage: dict[str, int],
     follow_usage: dict[str, int],
     logical_tool: str = GITHUB_SEARCH_TOOL,
+    path: str | None = None,
 ) -> dict[str, Any]:
-    """Full tool result (buffered ``structuredContent`` or stream ``done`` event)."""
     repo = repos[0] if len(repos) == 1 else None
     return {
         "meta": build_meta(
@@ -192,11 +213,12 @@ def build_tool_response(
             is_new_conversation=is_new_conversation,
             multi=multi,
             logical_tool=logical_tool,
+            path=path,
         ),
-        "answer": {
-            "text": answer_text,
-            "citations": citations_for_answer(internal_citations),
-        },
+        "answer": build_answer_payload(
+            answer_content=answer_content,
+            internal_citations=internal_citations,
+        ),
         "follow_up_questions": list(follow_up_questions),
         "latency_ms": map_latency_ms(internal_latency, logical_tool=logical_tool),
         "usage": map_usage_block(chat_usage, follow_usage),
@@ -236,7 +258,13 @@ def build_tool_error(
         meta.setdefault("github", {})["allowed"] = allowed
     return {
         "meta": meta,
-        "answer": {"text": "", "citations": []},
+        "answer": {
+            "format": ANSWER_FORMAT_BLOCKS,
+            "text": "",
+            "blocks": [],
+            "notes": [],
+            "citations": [],
+        },
         "follow_up_questions": [],
         "latency_ms": {},
         "usage": {},
@@ -278,6 +306,10 @@ def stream_meta_event(
     }
 
 
-def stream_delta_event(text: str) -> dict[str, Any]:
-    """SSE ``delta`` event body (answer text chunk only)."""
-    return {"answer": {"text": text}}
+def stream_answer_delta_event(text: str) -> dict[str, Any]:
+    """SSE ``answer_delta`` event body (answer text chunk only)."""
+    return {"text": text}
+
+
+# Backward-compatible alias for internal callers.
+stream_delta_event = stream_answer_delta_event

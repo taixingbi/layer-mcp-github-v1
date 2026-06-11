@@ -11,12 +11,15 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import Context
 
-from app.clients.llm import generate_follow_ups, iter_chat_completion_stream
+from app.ask.blocks import AnswerContent, iter_text_chunks, resolve_answer_content
+from app.ask.path_scope import resolve_search_inputs
+from app.clients.llm import EMPTY_USAGE
+from app.config import github_search_follow_ups
+from app.synth import get_synth_backend
 from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
 from .common import (
-    chat_messages,
     httpx_error_message,
     log_ask_done,
     log_ask_exception,
@@ -27,7 +30,7 @@ from .common import (
     tool_error_response,
 )
 from .pipeline import finish_github_search_result, gather_github_evidence
-from .response import stream_delta_event, stream_meta_event
+from .response import stream_answer_delta_event, stream_meta_event
 from .sse import parse_sse_frame, sse_format
 
 
@@ -35,6 +38,7 @@ async def stream_github_search_events(
     repo: str | None,
     question: str,
     *,
+    path: str | None = None,
     request_id: str | None = None,
     session_id: str | None = None,
     trace_id: str | None = None,
@@ -47,7 +51,7 @@ async def stream_github_search_events(
     tool_name: str = "github_search",
     jsonrpc_id: str | int | None = None,
 ) -> AsyncIterator[str]:
-    """Yield SSE: ``meta`` (once), ``delta`` (answer text chunks), ``done`` (full payload)."""
+    """Yield SSE: ``meta`` (once), ``answer_delta`` (answer text chunks), ``done`` (full payload)."""
     from app.mcp.jsonrpc import INTERNAL_ERROR, INVALID_PARAMS, sse_error_frame
 
     rid, sid, tid, conv = resolve_correlation(
@@ -89,7 +93,8 @@ async def stream_github_search_events(
         method=http_method,
         path=http_path,
     ):
-        scope, err_msg = resolve_ask_scope_or_error(repo)
+        repo, question, path = resolve_search_inputs(repo, question, path)
+        scope, err_msg = resolve_ask_scope_or_error(repo, question=question)
         if err_msg is not None:
             async for frame in _emit_error(err_msg):
                 yield frame
@@ -121,7 +126,7 @@ async def stream_github_search_events(
         citations: list[dict[str, Any]] = []
         readmes: dict[str, str] = {}
         code_hits: list[dict[str, str]] = []
-        answer = ""
+        answer_content = AnswerContent(text="", blocks=[], notes=[])
         follow_ups: list[str] = []
 
         try:
@@ -129,17 +134,22 @@ async def stream_github_search_events(
                 await _notify_status("github_readme", {"repos": scope.full_names})
 
                 citations, user_body, gh_latency, readmes, code_hits = gather_github_evidence(
-                    client, scope.full_names, question, scope.multi
+                    client,
+                    scope.full_names,
+                    question,
+                    scope.multi,
+                    path_prefix=path,
                 )
                 latency.update(gh_latency)
                 log_ask_github_done(len(citations), gh_latency, stream=True)
 
                 await _notify_status("chat_stream", {})
 
+                synth = get_synth_backend()
                 t_llm = time.perf_counter()
-                for kind, payload in iter_chat_completion_stream(
+                for kind, payload in synth.iter_stream(
                     client,
-                    messages=chat_messages(user_body),
+                    user_body=user_body,
                     conversation_id=conv,
                     request_id=rid,
                     session_id=sid,
@@ -150,29 +160,34 @@ async def stream_github_search_events(
                         text = str(payload)
                         if on_token:
                             on_token(text)
-                        yield sse_format("delta", stream_delta_event(text))
+                        yield sse_format("answer_delta", stream_answer_delta_event(text))
                     elif kind == "usage":
                         chat_usage = payload
                     elif kind == "done":
-                        answer = str(payload)
+                        if isinstance(payload, AnswerContent):
+                            answer_content = payload
+                        else:
+                            answer_content = resolve_answer_content(str(payload))
 
                 latency["chat"] = int((time.perf_counter() - t_llm) * 1000)
 
-                await _notify_status("follow_up_chat", {})
-
-                t_llm = time.perf_counter()
-                follow_ups, follow_usage = generate_follow_ups(
-                    client,
-                    question,
-                    answer,
-                    scope.scope_label,
-                    conversation_id=conv,
-                    request_id=rid,
-                    session_id=sid,
-                    trace_id=tid,
-                    user=user,
-                )
-                latency["follow_up_chat"] = int((time.perf_counter() - t_llm) * 1000)
+                if github_search_follow_ups():
+                    await _notify_status("follow_up_chat", {})
+                    t_llm = time.perf_counter()
+                    follow_ups, follow_usage = synth.follow_ups(
+                        client,
+                        question=question,
+                        answer=answer_content.text,
+                        scope_label=scope.scope_label,
+                        conversation_id=conv,
+                        request_id=rid,
+                        session_id=sid,
+                        trace_id=tid,
+                        user=user,
+                    )
+                    latency["follow_up_chat"] = int((time.perf_counter() - t_llm) * 1000)
+                else:
+                    follow_ups, follow_usage = [], dict(EMPTY_USAGE)
 
         except (httpx.HTTPError, ValueError) as e:
             log_ask_exception(e, stream=True)
@@ -198,7 +213,7 @@ async def stream_github_search_events(
             question=question,
             is_new_conv=new_conv,
             citations=citations,
-            answer=answer,
+            answer=answer_content,
             follow_ups=follow_ups,
             latency=latency,
             chat_usage=chat_usage,
@@ -209,6 +224,7 @@ async def stream_github_search_events(
             conv=conv,
             t0=t0,
             user=user,
+            path=path,
         )
         log_ask_done(
             scope,
@@ -226,6 +242,7 @@ async def github_search_mcp_stream(
     repo: str | None,
     question: str,
     *,
+    path: str | None = None,
     request_id: str | None = None,
     session_id: str | None = None,
     trace_id: str | None = None,
@@ -259,6 +276,7 @@ async def github_search_mcp_stream(
     async for frame in stream_github_search_events(
         repo,
         question,
+        path=path,
         request_id=request_id,
         session_id=session_id,
         trace_id=trace_id,
@@ -271,8 +289,8 @@ async def github_search_mcp_stream(
         event, data = parse_sse_frame(frame)
 
         if ctx:
-            if event == "delta":
-                text = (data.get("answer") or {}).get("text") or ""
+            if event == "answer_delta":
+                text = data.get("text") or (data.get("answer") or {}).get("text") or ""
                 if text:
                     await ctx.info(json.dumps({"type": "answer_delta", "text": text}))
             elif event == "error":

@@ -1,10 +1,12 @@
 """Standard tool response shape tests."""
 
+from app.ask.blocks import AnswerContent
 from app.ask.response import (
     GITHUB_SEARCH_TOOL,
     build_tool_error,
     build_tool_response,
     route_reason,
+    stream_answer_delta_event,
     stream_delta_event,
     stream_meta_event,
     tool_metrics_key,
@@ -12,7 +14,8 @@ from app.ask.response import (
 from app.observability.correlation import UserContext
 
 
-def test_build_tool_response_matches_schema() -> None:
+def test_build_tool_response_matches_schema(monkeypatch) -> None:
+    monkeypatch.setenv("GITHUB_SEARCH_ANSWER_FORMAT", "blocks")
     user = UserContext(
         user_id="u1",
         user_roles="admin",
@@ -30,7 +33,11 @@ def test_build_tool_response_matches_schema() -> None:
         question="What is huntAi?",
         is_new_conversation=False,
         multi=True,
-        answer_text="Hello [1]",
+        answer_content=AnswerContent(
+            text="Hello [1]",
+            blocks=[{"type": "paragraph", "text": "Hello [1]", "cite_ids": [1]}],
+            notes=[],
+        ),
         internal_citations=[{"index": 1, "label": "a README"}],
         follow_up_questions=["Q1?"],
         internal_latency={
@@ -47,6 +54,8 @@ def test_build_tool_response_matches_schema() -> None:
     assert body["meta"]["route"]["reason"] == route_reason(scope="all", multi=True)
     assert body["meta"]["github"]["scope"] == "all"
     assert list(body["meta"]["github"].keys()) == ["scope", "repos"]
+    assert body["answer"]["format"] == "blocks"
+    assert body["answer"]["blocks"][0]["type"] == "paragraph"
     assert body["answer"]["citations"] == [{"cite_id": 1, "source": "a README"}]
     tool_key = tool_metrics_key(GITHUB_SEARCH_TOOL)
     assert body["latency_ms"][tool_key]["retrieve_rerank"] == 30
@@ -84,4 +93,4 @@ def test_stream_events_no_duplicate_meta() -> None:
         multi=False,
     )
     assert list(meta) == ["meta"]
-    assert stream_delta_event("chunk") == {"answer": {"text": "chunk"}}
+    assert stream_answer_delta_event("chunk") == {"text": "chunk"}

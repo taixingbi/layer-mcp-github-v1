@@ -1,5 +1,7 @@
 """Allowlisted GitHub repo resolution."""
 
+from app.allowlist.rank import rank_repos_for_question
+from app.allowlist.rank import rank_repos_for_question
 from app.allowlist.repos import ALLOWED_REPOS
 from app.allowlist.resolve import (
     allowed_short_names,
@@ -14,4 +16,5 @@ __all__ = [
     "fail",
     "resolve_repo",
     "resolve_repos",
+    "rank_repos_for_question",
 ]

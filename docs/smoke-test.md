@@ -96,7 +96,7 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
   }' | tee /tmp/mcp-stream.txt
 ```
 
-**Pass:** SSE lines with `event: meta`, `event: delta`, `event: done`; first `meta` data has `.meta.request_id` `req-mcp-stream-1`.
+**Pass:** SSE lines with `event: meta`, `event: answer_delta`, `event: done`; first `meta` data has `.meta.request_id` `req-mcp-stream-1`.
 
 **Final JSON from `done`:**
 
@@ -172,6 +172,21 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
 ## Server logs
 
 During §3–4 expect GitHub readme/search and `POST .../v1/chat/completions` → `200 OK`. §4 uses SSE on `/v1/mcp` (not JSON-RPC envelope).
+
+---
+
+## Cursor SDK synthesis (`SYNTH_ENGINE=cursor_sdk`)
+
+Optional spike path. Install with `pip install -e ".[cursor]"`. Requires `CURSOR_API_KEY` instead of a reachable LLM gateway for `/ready`.
+
+```bash
+export SYNTH_ENGINE=cursor_sdk
+export CURSOR_API_KEY=cursor_...
+# GITHUB_TOKEN and GITHUB_OWNER still required
+python -m app.main --http
+```
+
+Re-run sections **0** ( `/ready` checks `cursor_sdk` not `llm_gateway` ), **6**, and **7** with the same pass criteria (`ok: true`, citations, answer text). Compare latency and answer quality against `SYNTH_ENGINE=legacy` on the same questions.
 
 ---
 
