@@ -13,10 +13,11 @@ README_MAX = 8000
 CODE_HITS_MAX = 15
 SNIPPET_MAX = 400
 LLM_CONTEXT_README_MAX = 6000
-MULTI_REPO_README_MAX = 1200
-MULTI_REPO_CODE_HITS_MAX = 20
-# Cap user message size so prompts fit vLLM --max-model-len (2048 on dev) with max_tokens.
-LLM_USER_BODY_MAX_CHARS = 4000
+MULTI_REPO_README_MAX = 800
+MULTI_REPO_CODE_HITS_MAX = 12
+# Cap user message size so prompts fit vLLM --max-model-len (2048) with max_tokens (512).
+# Chars != tokens; keep conservative for code/README-heavy bodies + long system prompt.
+LLM_USER_BODY_MAX_CHARS = 2400
 # Default scoped search when ``repo`` is omitted (tree URL → repo + path).
 GITHUB_SEARCH_DEFAULT_TREE_URL = (
     "https://github.com/taixingbi/layer-web-v1/tree/main/app/blog"
@@ -26,6 +27,10 @@ GITHUB_SEARCH_DEFAULT_TREE_URL = (
 def llm_user_body_max_chars() -> int:
     """Max characters for the github_search LLM user message (sources + question)."""
     return int(os.environ.get("LLM_USER_BODY_MAX_CHARS", str(LLM_USER_BODY_MAX_CHARS)))
+
+def multi_repo_code_hits_max() -> int:
+    """Max code-search hits merged across repos for multi-repo github_search."""
+    return int(os.environ.get("MULTI_REPO_CODE_HITS_MAX", str(MULTI_REPO_CODE_HITS_MAX)))
 
 load_dotenv(ROOT / ".env")
 

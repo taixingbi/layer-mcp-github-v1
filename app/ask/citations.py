@@ -96,8 +96,8 @@ def multi_repo_readme_cap(repo_count: int, *, code_hit_count: int = 0) -> int:
     if repo_count <= 1:
         return MULTI_REPO_README_MAX
     budget = llm_user_body_max_chars()
-    reserved = 1200 + min(repo_count * 80, 800)
-    snippet_reserved = min(max(code_hit_count, 1) * 120, 1500)
+    reserved = min(900, budget // 2) + min(repo_count * 60, 400)
+    snippet_reserved = min(max(code_hit_count, 1) * 100, budget // 2)
     readme_pool = max(400, budget - reserved - snippet_reserved)
     per_repo = max(120, readme_pool // repo_count)
     return min(MULTI_REPO_README_MAX, per_repo)
