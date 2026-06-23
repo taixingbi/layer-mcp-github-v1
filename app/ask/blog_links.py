@@ -7,6 +7,7 @@ from typing import Any
 
 # Keep in sync with layer-web-v1 ``app/lib/blog-posts.ts`` slugs + display titles.
 BLOG_POST_TITLES: dict[str, str] = {
+    "gpu-llm-serving-kubernetes": "GPU LLM Serving on Kubernetes",
     "building-an-ai-orchestrator": "Building an AI Orchestrator",
     "layer-gateway-inference-design": "Gateway Inference Design",
     "layer-rag-query-design": "Hybrid RAG in Production",
